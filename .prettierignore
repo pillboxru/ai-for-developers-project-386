@@ -1,0 +1,8 @@
+dist
+coverage
+package-lock.json
+CHANGELOG.md
+.release-please-manifest.json
+# Файлы Хекслета, редактировать нельзя
+.github/workflows/hexlet-check.yml
+.github/workflows/README.md
