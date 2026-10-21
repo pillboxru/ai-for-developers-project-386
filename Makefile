@@ -29,4 +29,4 @@ docker-build: ## собрать Docker-образ
 	docker build -t $(IMAGE) .
 
 docker-run: ## запустить образ на http://localhost:3000
-	docker run --rm -p 3000:3000 $(IMAGE)
+	docker run --rm --name $(IMAGE) -p 3000:3000 $(IMAGE)
