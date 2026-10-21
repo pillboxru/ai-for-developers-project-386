@@ -27,7 +27,8 @@ jobs:
       - name: Smoke test
         run: |
           docker run -d --name app -p 3000:3000 call-calendar
-          curl --fail --retry 10 --retry-connrefused --retry-delay 1 http://localhost:3000/api/health
+          # Пока Node стартует, docker-proxy сбрасывает соединение, поэтому повторяем при любой ошибке
+          curl --fail --retry 15 --retry-all-errors --retry-delay 1 http://localhost:3000/api/health
           curl --fail --silent http://localhost:3000/ | grep -q '<div id="root">'
       - name: Container logs
         if: always()
