@@ -3,7 +3,8 @@
   "packages": {
     ".": {
       "release-type": "node",
-      "package-name": "call-calendar"
+      "package-name": "call-calendar",
+      "initial-version": "0.1.0"
     }
   }
 }
