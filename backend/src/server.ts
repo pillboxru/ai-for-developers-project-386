@@ -1,7 +1,19 @@
+import closeWithGrace from 'close-with-grace'
 import { buildApp } from './app.js'
 
 const app = buildApp({ staticDir: process.env.STATIC_DIR, logger: true })
 const port = Number(process.env.PORT ?? 3000)
+
+// В контейнере node работает как PID 1 и без обработчика игнорирует SIGTERM:
+// docker stop ждёт 10 секунд и убивает процесс, обрывая текущие запросы
+closeWithGrace(async ({ signal, err }) => {
+  if (err) {
+    app.log.error({ err }, 'server closing with error')
+  } else {
+    app.log.info(`${signal} received, server closing`)
+  }
+  await app.close()
+})
 
 try {
   // 0.0.0.0, чтобы сервер был доступен снаружи Docker-контейнера
