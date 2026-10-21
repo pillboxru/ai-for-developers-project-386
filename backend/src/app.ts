@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import path from 'node:path'
 import Fastify from 'fastify'
 import fastifyStatic from '@fastify/static'
+import { healthRoutes } from './routes/health.js'
 
 export interface AppOptions {
   // Папка с собранным фронтендом. В продакшене бекенд раздаёт его сам.
@@ -12,7 +13,7 @@ export interface AppOptions {
 export function buildApp({ staticDir, logger = false }: AppOptions = {}) {
   const app = Fastify({ logger })
 
-  app.get('/api/health', async () => ({ status: 'ok' }))
+  app.register(healthRoutes, { prefix: '/api' })
 
   if (staticDir && existsSync(staticDir)) {
     app.register(fastifyStatic, { root: path.resolve(staticDir) })

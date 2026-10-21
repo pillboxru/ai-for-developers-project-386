@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Badge, Container, Group, Text, Title } from '@mantine/core'
+import { fetchHealth } from './api/health.ts'
 
 type BackendStatus = 'loading' | 'ok' | 'error'
 
@@ -7,11 +8,8 @@ function App() {
   const [status, setStatus] = useState<BackendStatus>('loading')
 
   useEffect(() => {
-    fetch('/api/health')
-      .then((response) => (response.ok ? response.json() : Promise.reject()))
-      .then((data: { status: string }) =>
-        setStatus(data.status === 'ok' ? 'ok' : 'error'),
-      )
+    fetchHealth()
+      .then((health) => setStatus(health.status))
       .catch(() => setStatus('error'))
   }, [])
 
