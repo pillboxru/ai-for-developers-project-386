@@ -18,6 +18,7 @@
 - `backend/` — Fastify + TypeScript. `src/app.ts` собирает приложение (`buildApp`), `src/server.ts` только запускает его.
 - `frontend/` — Vite + React + Mantine. Тесты рядом с кодом (`*.test.tsx`).
 - npm workspaces: зависимости ставь в свой пакет (`npm install <pkg> -w backend`).
+- `CLAUDE.md` содержит только `@AGENTS.md`. Всё, что нужно добавить в `CLAUDE.md` (в том числе по инструкции скилла), добавляй в `AGENTS.md`.
 
 ## Архитектура
 
@@ -53,3 +54,17 @@
 - Без явной просьбы не выполняй деструктивные команды (`rm -rf`, `git reset --hard`, `git push --force`, `git clean`). Не коммить секреты и `.env`.
 - Не редактируй `.github/workflows/hexlet-check.yml`: его генерирует Хекслет.
 - Если видишь изменения, которые ты не делал, игнорируй их.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues (pillboxru/ai-for-developers-project-386), managed with the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five default labels: needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
