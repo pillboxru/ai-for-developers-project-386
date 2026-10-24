@@ -3,6 +3,7 @@ import { Route, Routes } from 'react-router'
 import { AppHeader } from './components/AppHeader.tsx'
 import { BookPage } from './pages/BookPage.tsx'
 import { HomePage } from './pages/HomePage.tsx'
+import { SlotPickerPrototypePage } from './pages/SlotPickerPrototypePage.tsx'
 
 function App() {
   return (
@@ -14,6 +15,10 @@ function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/book" element={<BookPage />} />
+          <Route
+            path="/book/:eventTypeId"
+            element={<SlotPickerPrototypePage />}
+          />
         </Routes>
       </AppShell.Main>
     </AppShell>
