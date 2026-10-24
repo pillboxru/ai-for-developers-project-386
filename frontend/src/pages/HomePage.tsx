@@ -28,8 +28,8 @@ interface Feature {
 const features: Feature[] = [
   {
     icon: IconClockHour4,
-    title: 'Звонки по 30 минут',
-    description: 'В то время, которое открыл владелец.',
+    title: 'Звонки разной длительности',
+    description: 'Длительность задаёт тип события, время открывает владелец.',
   },
   {
     icon: IconShieldCheck,
@@ -50,12 +50,12 @@ interface Step {
 
 const steps: Step[] = [
   {
-    title: 'Выберите день',
-    description: 'В календаре видно, в какие дни есть свободные слоты.',
+    title: 'Выберите тип события',
+    description: 'У каждого типа своё название, описание и длительность.',
   },
   {
     title: 'Выберите слот',
-    description: 'Каждый слот длится 30 минут.',
+    description: 'В календаре видны свободные слоты на 14 дней вперёд.',
   },
   {
     title: 'Оставьте имя и email',
