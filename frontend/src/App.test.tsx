@@ -1,28 +1,41 @@
 import { render, screen } from '@testing-library/react'
 import { MantineProvider } from '@mantine/core'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { MemoryRouter } from 'react-router'
+import { describe, expect, it } from 'vitest'
 import App from './App.tsx'
 
-describe('App', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals()
-  })
-
-  it('показывает заголовок и статус бекенда', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(Response.json({ status: 'ok' })),
-    )
-
-    render(
-      <MantineProvider>
+function renderAt(path: string) {
+  render(
+    <MantineProvider>
+      <MemoryRouter initialEntries={[path]}>
         <App />
-      </MantineProvider>,
-    )
+      </MemoryRouter>
+    </MantineProvider>,
+  )
+}
+
+describe('App', () => {
+  it.each([
+    ['/', 'Запишитесь на звонок в удобное время'],
+    ['/book', 'Запись'],
+    ['/owner', 'Страница владельца'],
+  ])('по адресу %s показывает страницу «%s»', (path, heading) => {
+    renderAt(path)
 
     expect(
-      screen.getByRole('heading', { name: 'Запись на звонок' }),
+      screen.getByRole('heading', { level: 1, name: heading }),
     ).toBeInTheDocument()
-    expect(await screen.findByText('ok')).toBeInTheDocument()
+  })
+
+  it('шапка ведёт на главную страницу и на страницу владельца', () => {
+    renderAt('/book')
+
+    expect(
+      screen.getByRole('link', { name: 'Запись на звонок' }),
+    ).toHaveAttribute('href', '/')
+    expect(screen.getByRole('link', { name: 'Для владельца' })).toHaveAttribute(
+      'href',
+      '/owner',
+    )
   })
 })

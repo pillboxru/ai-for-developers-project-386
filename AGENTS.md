@@ -17,6 +17,7 @@
 
 - `backend/` — Fastify + TypeScript. `src/app.ts` собирает приложение (`buildApp`), `src/server.ts` только запускает его.
 - `frontend/` — Vite + React + Mantine. Тесты рядом с кодом (`*.test.tsx`).
+- Маршруты фронтенда (React Router) описаны в `frontend/src/App.tsx`, страницы лежат в `frontend/src/pages/`, общая шапка — `frontend/src/components/AppLayout.tsx`.
 - npm workspaces: зависимости ставь в свой пакет (`npm install <pkg> -w backend`).
 - `CLAUDE.md` содержит только `@AGENTS.md`. Всё, что нужно добавить в `CLAUDE.md` (в том числе по инструкции скилла), добавляй в `AGENTS.md`.
 
@@ -30,7 +31,7 @@
 
 - Маршрут: `backend/src/routes/health.ts`, его тест через `app.inject()`: `backend/src/routes/health.test.ts`.
 - Запрос к API: `frontend/src/api/health.ts`.
-- Тест компонента: `frontend/src/App.test.tsx` (обёртка `MantineProvider`, `fetch` через `vi.stubGlobal`).
+- Тест страницы: `frontend/src/pages/HomePage.test.tsx` (обёртка `MantineProvider` + `MemoryRouter`). Запросы к API в тестах мокай через `vi.stubGlobal('fetch', …)`.
 
 ## Как писать код
 
