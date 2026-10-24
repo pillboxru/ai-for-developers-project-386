@@ -2,7 +2,10 @@ import { existsSync } from 'node:fs'
 import path from 'node:path'
 import Fastify from 'fastify'
 import fastifyStatic from '@fastify/static'
+import { EventTypeRepository } from './repositories/event-types.js'
+import { eventTypeRoutes } from './routes/event-types.js'
 import { healthRoutes } from './routes/health.js'
+import { EventTypeService } from './services/event-types.js'
 
 export interface AppOptions {
   // Папка с собранным фронтендом. В продакшене бекенд раздаёт его сам.
@@ -14,6 +17,10 @@ export function buildApp({ staticDir, logger = false }: AppOptions = {}) {
   const app = Fastify({ logger })
 
   app.register(healthRoutes, { prefix: '/api' })
+  app.register(eventTypeRoutes, {
+    prefix: '/api',
+    eventTypes: new EventTypeService(new EventTypeRepository()),
+  })
 
   if (staticDir && existsSync(staticDir)) {
     app.register(fastifyStatic, { root: path.resolve(staticDir) })
