@@ -121,6 +121,10 @@ function OwnerEventTypesPage() {
 
   return (
     <>
+      <Title order={1}>Календарь владельца</Title>
+      <Text c="dimmed" mt="sm" mb="xl">
+        Типы событий, которые вы предлагаете гостям.
+      </Text>
       <Group justify="space-between" mb="md">
         <Title order={2}>Типы событий</Title>
         {state.status === 'ready' && (

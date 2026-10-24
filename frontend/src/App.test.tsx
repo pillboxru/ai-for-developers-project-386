@@ -37,9 +37,9 @@ describe('App', () => {
     renderApp('/')
 
     expect(
-      screen.getByRole('heading', { name: 'Запись на звонок' }),
+      await screen.findByRole('heading', { name: 'Запись на звонок' }),
     ).toBeInTheDocument()
-    expect(await screen.findByText('ok')).toBeInTheDocument()
+    expect(await screen.findByText('бекенд: ok')).toBeInTheDocument()
   })
 
   it('на /owner открывает страницу владельца', async () => {
@@ -48,7 +48,13 @@ describe('App', () => {
     renderApp('/owner')
 
     expect(
-      await screen.findByRole('heading', { name: 'Типы событий' }),
+      await screen.findByRole('heading', { name: 'Календарь владельца' }),
     ).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Типы событий' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { name: 'Запись на звонок' }),
+    ).toBeNull()
   })
 })

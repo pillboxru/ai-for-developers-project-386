@@ -1,5 +1,14 @@
 import { useEffect, useState } from 'react'
-import { Alert, Badge, Card, Group, Loader, Stack, Text } from '@mantine/core'
+import {
+  Alert,
+  Badge,
+  Card,
+  Group,
+  Loader,
+  Stack,
+  Text,
+  Title,
+} from '@mantine/core'
 import { fetchEventTypes, type EventType } from '../api/event-types.ts'
 
 type LoadState =
@@ -16,6 +25,18 @@ function GuestPage() {
       .catch(() => setState({ status: 'error' }))
   }, [])
 
+  return (
+    <>
+      <Title order={1}>Запись на звонок</Title>
+      <Text c="dimmed" mt="sm" mb="xl">
+        Выберите тип события, чтобы записаться на звонок.
+      </Text>
+      <EventTypeList state={state} />
+    </>
+  )
+}
+
+function EventTypeList({ state }: { state: LoadState }) {
   if (state.status === 'loading') {
     return <Loader />
   }

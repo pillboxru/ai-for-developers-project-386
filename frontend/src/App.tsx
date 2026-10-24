@@ -1,13 +1,5 @@
 import { useEffect, useState } from 'react'
-import {
-  Anchor,
-  Badge,
-  Box,
-  Container,
-  Group,
-  Text,
-  Title,
-} from '@mantine/core'
+import { Anchor, Badge, Container, Group } from '@mantine/core'
 import { Link, Route, Routes } from 'react-router'
 import { fetchHealth } from './api/health.ts'
 import GuestPage from './pages/GuestPage.tsx'
@@ -26,36 +18,31 @@ function App() {
 
   return (
     <Container size="sm" py="xl">
-      <Group gap="md" mb="md">
-        <Anchor component={Link} to="/">
-          Гость
-        </Anchor>
-        <Anchor component={Link} to="/owner">
-          Владелец
-        </Anchor>
+      <Group justify="space-between" mb="xl">
+        <Group gap="md">
+          <Anchor component={Link} to="/">
+            Гость
+          </Anchor>
+          <Anchor component={Link} to="/owner">
+            Владелец
+          </Anchor>
+        </Group>
+        <Badge variant="dot" size="xs" color={statusColor[status]}>
+          {statusLabel[status]}
+        </Badge>
       </Group>
-      <Title order={1}>Запись на звонок</Title>
-      <Text c="dimmed" mt="sm">
-        Выберите свободное время и запишитесь на встречу.
-      </Text>
-      <Group mt="lg" gap="xs">
-        <Text size="sm">Бекенд:</Text>
-        <Badge color={statusColor[status]}>{statusLabel[status]}</Badge>
-      </Group>
-      <Box mt="xl">
-        <Routes>
-          <Route path="/" element={<GuestPage />} />
-          <Route path="/owner" element={<OwnerEventTypesPage />} />
-        </Routes>
-      </Box>
+      <Routes>
+        <Route path="/" element={<GuestPage />} />
+        <Route path="/owner" element={<OwnerEventTypesPage />} />
+      </Routes>
     </Container>
   )
 }
 
 const statusLabel: Record<BackendStatus, string> = {
-  loading: 'проверяем…',
-  ok: 'ok',
-  error: 'недоступен',
+  loading: 'бекенд: проверяем…',
+  ok: 'бекенд: ok',
+  error: 'бекенд недоступен',
 }
 
 const statusColor: Record<BackendStatus, string> = {
