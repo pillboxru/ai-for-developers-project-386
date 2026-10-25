@@ -17,6 +17,8 @@ backend/src/generated
 .env.*
 !.env.example
 *.local
+# Конфиг MCP с ключом Render, в репозитории только шаблон .mcp.json.example
+.mcp.json
 
 # Logs
 *.log
