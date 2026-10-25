@@ -18,6 +18,8 @@ export const bookingsQuery = () => listBookingsOptions()
 // закончившееся — 409 booking_ended. Вернуть отмену нельзя
 export const cancelBookingMutationOptions = () => cancelBookingMutation()
 
+// После отмены, а также когда список мог устареть: сервер отказал из-за
+// бронирования, которого ещё нет на экране
 export function invalidateBookings(queryClient: QueryClient) {
   return queryClient.invalidateQueries({ queryKey: listBookingsQueryKey() })
 }
