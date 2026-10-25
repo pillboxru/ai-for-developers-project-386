@@ -70,7 +70,7 @@ export function buildApp({
   const eventTypes = createEventTypeRepository()
   const bookings = createBookingRepository()
   const schedule = createScheduleRepository()
-  const eventTypeService = createEventTypeService({ eventTypes })
+  const eventTypeService = createEventTypeService({ eventTypes, bookings })
   const slotService = createSlotService({
     schedule,
     bookings,

@@ -1,4 +1,4 @@
-import { Badge, Button, Group, Table } from '@mantine/core'
+import { Badge, Button, Group, Table, Tooltip } from '@mantine/core'
 import type { EventType } from '../../api/generated/types.gen.ts'
 import { formatDuration } from '../../format/duration.ts'
 
@@ -47,14 +47,26 @@ export function EventTypesTable({
                   >
                     Изменить
                   </Button>
-                  <Button
-                    variant="subtle"
-                    color="red"
-                    size="compact-sm"
-                    onClick={() => onDelete(eventType)}
+                  {/* Выключенная кнопка не получает наведение, поэтому
+                      подсказка вешается на обёртку */}
+                  <Tooltip
+                    label="Нельзя удалить: у типа есть бронирования. Скройте тип, чтобы гости его не видели"
+                    disabled={!eventType.hasBookings}
+                    multiline
+                    w={260}
                   >
-                    Удалить
-                  </Button>
+                    <span>
+                      <Button
+                        variant="subtle"
+                        color="red"
+                        size="compact-sm"
+                        disabled={eventType.hasBookings}
+                        onClick={() => onDelete(eventType)}
+                      >
+                        Удалить
+                      </Button>
+                    </span>
+                  </Tooltip>
                 </Group>
               </Table.Td>
             </Table.Tr>

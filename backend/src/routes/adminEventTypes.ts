@@ -12,6 +12,11 @@ const titleTaken: ApiError = {
   fieldErrors: [{ field: 'title', message: titleTakenMessage }],
 }
 
+const hasBookings: ApiError = {
+  code: 'event_type_has_bookings',
+  message: 'У типа события есть бронирования',
+}
+
 export const adminEventTypeHandlers = (
   eventTypeService: EventTypeService,
 ): Pick<
@@ -43,6 +48,13 @@ export const adminEventTypeHandlers = (
     if (result.kind === 'title_taken') {
       return reply.code(409).send(titleTaken)
     }
+    if (result.kind === 'has_bookings') {
+      return reply.code(409).send({
+        ...hasBookings,
+        message:
+          'Длительность нельзя изменить: у типа есть бронирования. Для другой длительности создайте новый тип',
+      })
+    }
     return reply.code(200).send(result.eventType)
   },
 
@@ -50,6 +62,13 @@ export const adminEventTypeHandlers = (
     const result = eventTypeService.delete(request.params.eventTypeId)
     if (result.kind === 'not_found') {
       return sendNotFound(reply)
+    }
+    if (result.kind === 'has_bookings') {
+      return reply.code(409).send({
+        ...hasBookings,
+        message:
+          'Тип нельзя удалить: у него есть бронирования. Скройте тип, чтобы гости его не видели',
+      })
     }
     return reply.code(204).send()
   },

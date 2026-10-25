@@ -10,7 +10,7 @@ import {
 } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { fieldErrorsOf } from '../../api/errors.ts'
+import { fieldErrorsOf, isApiError } from '../../api/errors.ts'
 import {
   invalidateEventTypes,
   saveEventTypeMutationOptions,
@@ -113,6 +113,14 @@ export function EventTypeModal({
       const fieldErrors = fieldErrorsOf(error)
       if (fieldErrors) {
         form.setErrors(fieldErrors)
+      } else if (
+        isApiError(error) &&
+        error.code === 'event_type_has_bookings'
+      ) {
+        // Бронирование появилось, пока форма была открыта: список надо
+        // перечитать, чтобы длительность выключилась
+        notifyActionError(error.message)
+        void invalidateEventTypes(queryClient)
       } else {
         notifyActionError()
       }
@@ -145,6 +153,12 @@ export function EventTypeModal({
           <Select
             label="Длительность"
             data={minutesOptions}
+            description={
+              eventType?.hasBookings
+                ? 'Длительность нельзя изменить: у типа есть бронирования. Для другой длительности создайте новый тип'
+                : undefined
+            }
+            disabled={eventType?.hasBookings}
             allowDeselect={false}
             {...form.getInputProps('durationMinutes')}
           />

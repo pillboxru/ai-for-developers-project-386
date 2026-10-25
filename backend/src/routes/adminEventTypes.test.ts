@@ -490,3 +490,187 @@ describe('DELETE /api/admin/event-types/:eventTypeId', () => {
     })
   })
 })
+
+describe('защита бронирований', () => {
+  const guest = { name: 'Иван Петров', email: 'ivan@example.com' }
+
+  // Бронирует первый свободный слот типа; часы приложения передвигает тест
+  async function bookFirstSlot(
+    app: ReturnType<typeof buildTestApp>,
+    eventTypeId: string,
+  ) {
+    const slots = await app.inject({
+      method: 'GET',
+      url: `/api/event-types/${eventTypeId}/slots`,
+    })
+    const start = slots.json<{ slots: { start: string }[] }>().slots[0]?.start
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/event-types/${eventTypeId}/bookings`,
+      payload: { ...guest, start },
+    })
+    expect(response.statusCode).toBe(201)
+    return response.json<{ id: string }>()
+  }
+
+  const cancel = (app: ReturnType<typeof buildTestApp>, bookingId: string) =>
+    app.inject({
+      method: 'POST',
+      url: `/api/admin/bookings/${bookingId}/cancel`,
+    })
+
+  const listBookings = async (app: ReturnType<typeof buildTestApp>) =>
+    (await app.inject({ method: 'GET', url: '/api/admin/bookings' })).json<
+      { id: string }[]
+    >()
+
+  const put = (
+    app: ReturnType<typeof buildTestApp>,
+    id: string,
+    input: CreateEventType,
+  ) =>
+    app.inject({
+      method: 'PUT',
+      url: `/api/admin/event-types/${id}`,
+      payload: input,
+    })
+
+  const remove = (app: ReturnType<typeof buildTestApp>, id: string) =>
+    app.inject({ method: 'DELETE', url: `/api/admin/event-types/${id}` })
+
+  it('hasBookings: есть неотменённое — true, после отмены — false', async () => {
+    const app = buildTestApp()
+    const { id } = await createEventType(app, {})
+    const booking = await bookFirstSlot(app, id)
+    const hasBookings = async () =>
+      (await app.inject({ method: 'GET', url: '/api/admin/event-types' })).json<
+        { hasBookings: boolean }[]
+      >()[0]?.hasBookings
+
+    expect(await hasBookings()).toBe(true)
+    await cancel(app, booking.id)
+    expect(await hasBookings()).toBe(false)
+  })
+
+  it('hasBookings считает и прошедшие бронирования', async () => {
+    let now = new Date('2026-11-02T06:00:00Z')
+    const app = buildTestApp({ now: () => now })
+    const { id } = await createEventType(app, {})
+    await bookFirstSlot(app, id)
+    now = new Date('2026-12-01T06:00:00Z')
+
+    const list = await app.inject({
+      method: 'GET',
+      url: '/api/admin/event-types',
+    })
+    expect(list.json()[0]).toMatchObject({ hasBookings: true })
+  })
+
+  it('смена длительности при неотменённом бронировании даёт 409', async () => {
+    const app = buildTestApp()
+    const { id } = await createEventType(app, {})
+    await bookFirstSlot(app, id)
+
+    const response = await put(app, id, eventTypeInput({ durationMinutes: 60 }))
+
+    expect(response.statusCode).toBe(409)
+    expect(response.json()).toMatchObject({ code: 'event_type_has_bookings' })
+  })
+
+  it('прошедшее бронирование тоже защищает длительность', async () => {
+    let now = new Date('2026-11-02T06:00:00Z')
+    const app = buildTestApp({ now: () => now })
+    const { id } = await createEventType(app, {})
+    await bookFirstSlot(app, id)
+    now = new Date('2026-12-01T06:00:00Z')
+
+    const response = await put(app, id, eventTypeInput({ durationMinutes: 60 }))
+
+    expect(response.statusCode).toBe(409)
+  })
+
+  it('остальные поля при бронированиях меняются, длительность без изменения тоже', async () => {
+    const app = buildTestApp()
+    const { id } = await createEventType(app, {})
+    await bookFirstSlot(app, id)
+
+    const response = await put(
+      app,
+      id,
+      eventTypeInput({ title: 'Новое имя', slotStepMinutes: 15, hidden: true }),
+    )
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toMatchObject({
+      title: 'Новое имя',
+      hasBookings: true,
+    })
+  })
+
+  it('только отменённые: длительность меняется, конец отменённого пересчитан', async () => {
+    const app = buildTestApp()
+    const { id } = await createEventType(app, {})
+    const booking = await bookFirstSlot(app, id)
+    await cancel(app, booking.id)
+
+    const response = await put(app, id, eventTypeInput({ durationMinutes: 60 }))
+
+    expect(response.statusCode).toBe(200)
+    const [listed] = await listBookings(app)
+    expect(listed).toMatchObject({ id: booking.id, cancelled: true })
+    const { start, end } = listed as unknown as { start: string; end: string }
+    expect(Date.parse(end) - Date.parse(start)).toBe(60 * 60_000)
+  })
+
+  it('удаление при неотменённом бронировании даёт 409, тип и бронирование остаются', async () => {
+    const app = buildTestApp()
+    const { id } = await createEventType(app, {})
+    await bookFirstSlot(app, id)
+
+    const response = await remove(app, id)
+
+    expect(response.statusCode).toBe(409)
+    expect(response.json()).toMatchObject({ code: 'event_type_has_bookings' })
+    expect(await listBookings(app)).toHaveLength(1)
+    const page = await app.inject({
+      method: 'GET',
+      url: `/api/event-types/${id}/slots`,
+    })
+    expect(page.statusCode).toBe(200)
+  })
+
+  it('только отменённые: 204, они удаляются с типом, слоты других типов целы', async () => {
+    const app = buildTestApp()
+    const { id } = await createEventType(app, { title: 'Первый' })
+    const other = await createEventType(app, { title: 'Второй' })
+    const cancelled = await bookFirstSlot(app, id)
+    await cancel(app, cancelled.id)
+    const kept = await bookFirstSlot(app, other.id)
+
+    const response = await remove(app, id)
+
+    expect(response.statusCode).toBe(204)
+    expect((await listBookings(app)).map((b) => b.id)).toEqual([kept.id])
+    const slots = await app.inject({
+      method: 'GET',
+      url: `/api/event-types/${other.id}/slots`,
+    })
+    expect(slots.statusCode).toBe(200)
+  })
+
+  it('бронирование скрытого типа остаётся у владельца и отменяется; новое — 404', async () => {
+    const app = buildTestApp()
+    const { id } = await createEventType(app, {})
+    const booking = await bookFirstSlot(app, id)
+    await put(app, id, eventTypeInput({ hidden: true }))
+
+    expect(await listBookings(app)).toHaveLength(1)
+    const again = await app.inject({
+      method: 'POST',
+      url: `/api/event-types/${id}/bookings`,
+      payload: { ...guest, start: '2026-11-03T07:00:00Z' },
+    })
+    expect(again.statusCode).toBe(404)
+    expect((await cancel(app, booking.id)).statusCode).toBe(200)
+  })
+})

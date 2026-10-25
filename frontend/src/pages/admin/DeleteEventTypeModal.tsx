@@ -1,5 +1,6 @@
 import { Button, Group, Modal, Stack, Text } from '@mantine/core'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { isApiError } from '../../api/errors.ts'
 import {
   deleteEventTypeMutationOptions,
   invalidateEventTypes,
@@ -27,8 +28,16 @@ export function DeleteEventTypeModal({
       onClose()
       await invalidateEventTypes(queryClient)
     },
-    onError: () =>
-      notifyActionError('Не удалось удалить тип события. Попробуйте ещё раз.'),
+    onError: async (error) => {
+      if (isApiError(error) && error.code === 'event_type_has_bookings') {
+        // Бронирование появилось, пока диалог был открыт
+        notifyActionError(error.message)
+        onClose()
+        await invalidateEventTypes(queryClient)
+        return
+      }
+      notifyActionError('Не удалось удалить тип события. Попробуйте ещё раз.')
+    },
   })
 
   return (

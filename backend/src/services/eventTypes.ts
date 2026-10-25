@@ -5,6 +5,7 @@ import type {
   PublicEventType,
   UpdateEventType,
 } from '../generated/types.gen.js'
+import type { BookingRepository } from '../repositories/bookings.js'
 import type {
   EventTypeRecord,
   EventTypeRepository,
@@ -12,6 +13,7 @@ import type {
 
 export interface EventTypeServiceDeps {
   eventTypes: EventTypeRepository
+  bookings: BookingRepository
 }
 
 export type CreateEventTypeResult =
@@ -21,8 +23,10 @@ export type UpdateEventTypeResult =
   | { kind: 'updated'; eventType: EventType }
   | { kind: 'not_found' }
   | { kind: 'title_taken' }
+  | { kind: 'has_bookings' }
 
-export type DeleteEventTypeResult = { kind: 'deleted' } | { kind: 'not_found' }
+export type DeleteEventTypeResult =
+  { kind: 'deleted' } | { kind: 'not_found' } | { kind: 'has_bookings' }
 
 // Названия сравниваются без учёта регистра по правилам русского языка.
 // Больше ничего не нормализуем: «ё» и «е» разные буквы, а схлопывание
@@ -45,12 +49,20 @@ export const toPublicEventType = ({
 
 export type EventTypeService = ReturnType<typeof createEventTypeService>
 
-export function createEventTypeService({ eventTypes }: EventTypeServiceDeps) {
-  // Бронирований пока нет: hasBookings начнёт считаться по ним вместе с
-  // хранилищем бронирований
+export function createEventTypeService({
+  eventTypes,
+  bookings,
+}: EventTypeServiceDeps) {
+  // Неотменённые бронирования, в том числе прошедшие: владелец не должен
+  // задним числом менять время звонков, которые состоялись (ADR 0002)
+  const hasActiveBookings = (id: string) =>
+    bookings
+      .list()
+      .some((booking) => booking.eventTypeId === id && !booking.cancelled)
+
   const toEventType = (record: EventTypeRecord): EventType => ({
     ...record,
-    hasBookings: false,
+    hasBookings: hasActiveBookings(record.id),
   })
 
   // Скрытые типы тоже участвуют: иначе вернуть скрытый тип гостям было бы
@@ -104,11 +116,18 @@ export function createEventTypeService({ eventTypes }: EventTypeServiceDeps) {
 
     // Правка полной моделью (23.1): описания нет во вводе — его нет и у типа
     update: (id: string, input: UpdateEventType): UpdateEventTypeResult => {
-      if (!eventTypes.get(id)) {
+      const existing = eventTypes.get(id)
+      if (!existing) {
         return { kind: 'not_found' }
       }
       if (isTitleTaken(input.title, id)) {
         return { kind: 'title_taken' }
+      }
+      if (
+        input.durationMinutes !== existing.durationMinutes &&
+        hasActiveBookings(id)
+      ) {
+        return { kind: 'has_bookings' }
       }
 
       const record: EventTypeRecord = {
@@ -126,6 +145,15 @@ export function createEventTypeService({ eventTypes }: EventTypeServiceDeps) {
     delete: (id: string): DeleteEventTypeResult => {
       if (!eventTypes.get(id)) {
         return { kind: 'not_found' }
+      }
+      if (hasActiveBookings(id)) {
+        return { kind: 'has_bookings' }
+      }
+      // Отменённые бронирования уходят с типом: конец без типа не вычислить
+      for (const booking of bookings.list()) {
+        if (booking.eventTypeId === id) {
+          bookings.delete(booking.id)
+        }
       }
       eventTypes.delete(id)
       return { kind: 'deleted' }

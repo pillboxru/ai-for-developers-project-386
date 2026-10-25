@@ -564,3 +564,97 @@ describe('удаление типа события', () => {
     ).toBeInTheDocument()
   })
 })
+
+describe('защита бронирований', () => {
+  const hint =
+    'Длительность нельзя изменить: у типа есть бронирования. Для другой длительности создайте новый тип'
+
+  it('при бронированиях длительность выключена с подсказкой, остальное доступно', async () => {
+    server.use(
+      handleListAdminEventTypes({
+        body: [
+          eventType({ title: 'Разбор', hasBookings: true }),
+          eventType({ title: 'Знакомство' }),
+        ],
+      }),
+    )
+    renderApp('/admin/event-types')
+
+    const modal = await openEditModal('Разбор')
+
+    const duration = modal.getByRole('combobox', { name: 'Длительность' })
+    expect(duration).toBeDisabled()
+    expect(duration).toHaveAccessibleDescription(hint)
+    expect(modal.getByRole('combobox', { name: 'Шаг' })).toBeEnabled()
+    expect(modal.getByRole('textbox', { name: 'Название' })).toBeEnabled()
+  })
+
+  it('без бронирований длительность доступна и подсказки нет', async () => {
+    server.use(
+      handleListAdminEventTypes({ body: [eventType({ title: 'Разбор' })] }),
+    )
+    renderApp('/admin/event-types')
+
+    const modal = await openEditModal('Разбор')
+
+    expect(modal.getByRole('combobox', { name: 'Длительность' })).toBeEnabled()
+    expect(modal.queryByText(hint)).not.toBeInTheDocument()
+  })
+
+  it('«Удалить» выключена у типа с бронированиями и объясняет, что делать', async () => {
+    server.use(
+      handleListAdminEventTypes({
+        body: [
+          eventType({ title: 'Разбор', hasBookings: true }),
+          eventType({ title: 'Знакомство' }),
+        ],
+      }),
+    )
+    renderApp('/admin/event-types')
+
+    const busy = await rowOf('Разбор')
+    const free = await rowOf('Знакомство')
+    const button = busy.getByRole('button', { name: 'Удалить' })
+
+    expect(button).toBeDisabled()
+    expect(free.getByRole('button', { name: 'Удалить' })).toBeEnabled()
+    const wrapper = button.closest('span')
+    if (!wrapper) throw new Error('Нет обёртки подсказки')
+    fireEvent.mouseEnter(wrapper)
+    expect(
+      await screen.findByText(/Скройте тип, чтобы гости его не видели/),
+    ).toBeInTheDocument()
+  })
+
+  it('409 при удалении показывает сообщение сервера и перечитывает список', async () => {
+    let hasBookings = false
+    server.use(
+      handleListAdminEventTypes(() =>
+        HttpResponse.json([eventType({ title: 'Разбор', hasBookings })]),
+      ),
+      handleDeleteEventType(() => {
+        hasBookings = true
+        return HttpResponse.json<ApiError>(
+          {
+            code: 'event_type_has_bookings',
+            message: 'Тип нельзя удалить: у него есть бронирования',
+          },
+          { status: 409 },
+        )
+      }),
+    )
+    renderApp('/admin/event-types')
+
+    const modal = await openDeleteModal('Разбор')
+    fireEvent.click(modal.getByRole('button', { name: 'Удалить' }))
+
+    expect(
+      await screen.findByText('Тип нельзя удалить: у него есть бронирования'),
+    ).toBeInTheDocument()
+    await waitFor(async () =>
+      expect(
+        (await rowOf('Разбор')).getByRole('button', { name: 'Удалить' }),
+      ).toBeDisabled(),
+    )
+  })
+})

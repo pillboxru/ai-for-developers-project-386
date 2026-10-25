@@ -12,7 +12,7 @@ import { createSlotService } from './slots.js'
 function services(now = () => new Date('2026-11-02T06:00:00Z')) {
   const eventTypes = createEventTypeRepository()
   const bookings = createBookingRepository()
-  const eventTypeService = createEventTypeService({ eventTypes })
+  const eventTypeService = createEventTypeService({ eventTypes, bookings })
   const slotService = createSlotService({
     schedule: createScheduleRepository(),
     bookings,

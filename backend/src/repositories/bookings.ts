@@ -15,6 +15,7 @@ export interface BookingRepository {
   insert(record: BookingRecord): void
   // Заменяет запись с тем же id, место в порядке создания сохраняется
   update(record: BookingRecord): void
+  delete(id: Uuid): void
 }
 
 // Хранилище в памяти процесса (ADR 0001)
@@ -30,6 +31,12 @@ export function createBookingRepository(): BookingRepository {
     update: (record) => {
       const index = records.findIndex(({ id }) => id === record.id)
       records[index] = record
+    },
+    delete: (id) => {
+      const index = records.findIndex((record) => record.id === id)
+      if (index !== -1) {
+        records.splice(index, 1)
+      }
     },
   }
 }
