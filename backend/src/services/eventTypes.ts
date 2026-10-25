@@ -55,14 +55,14 @@ export function createEventTypeService({
 }: EventTypeServiceDeps) {
   // Неотменённые бронирования, в том числе прошедшие: владелец не должен
   // задним числом менять время звонков, которые состоялись (ADR 0002)
-  const hasActiveBookings = (id: string) =>
+  const hasUncancelledBookings = (id: string) =>
     bookings
       .list()
       .some((booking) => booking.eventTypeId === id && !booking.cancelled)
 
   const toEventType = (record: EventTypeRecord): EventType => ({
     ...record,
-    hasBookings: hasActiveBookings(record.id),
+    hasBookings: hasUncancelledBookings(record.id),
   })
 
   // Скрытые типы тоже участвуют: иначе вернуть скрытый тип гостям было бы
@@ -125,7 +125,7 @@ export function createEventTypeService({
       }
       if (
         input.durationMinutes !== existing.durationMinutes &&
-        hasActiveBookings(id)
+        hasUncancelledBookings(id)
       ) {
         return { kind: 'has_bookings' }
       }
@@ -146,7 +146,7 @@ export function createEventTypeService({
       if (!eventTypes.get(id)) {
         return { kind: 'not_found' }
       }
-      if (hasActiveBookings(id)) {
+      if (hasUncancelledBookings(id)) {
         return { kind: 'has_bookings' }
       }
       // Отменённые бронирования уходят с типом: конец без типа не вычислить
