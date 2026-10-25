@@ -7,9 +7,12 @@ import {
   Switch,
   Text,
   Title,
+  Tooltip,
 } from '@mantine/core'
 import { IconDots } from '@tabler/icons-react'
 import { useEffect, useState } from 'react'
+import { formatSlotTime } from '../../../format/dateTime.ts'
+import type { BookingMark } from './bookingMarks.ts'
 import {
   cellMinutes,
   cellsPerDay,
@@ -21,11 +24,14 @@ import {
 const workdays = [0, 1, 2, 3, 4]
 const allDays = [0, 1, 2, 3, 4, 5, 6]
 
-const closedDay = (): DayCells => Array.from({ length: cellsPerDay }, () => false)
+const closedDay = (): DayCells =>
+  Array.from({ length: cellsPerDay }, () => false)
 
 interface WeekMatrixProps {
   weekly: DayCells[]
   onChange: (weekly: DayCells[]) => void
+  marks: BookingMark[]
+  timeZone: string
 }
 
 // Выделение мышью: от ячейки, где нажали, до ячейки под курсором
@@ -53,7 +59,12 @@ const cellHeight = 14
 const dayRows = { first: 12, last: 46 }
 const allRows = { first: 0, last: cellsPerDay }
 
-export function WeekMatrix({ weekly, onChange }: WeekMatrixProps) {
+export function WeekMatrix({
+  weekly,
+  onChange,
+  marks,
+  timeZone,
+}: WeekMatrixProps) {
   const [showNight, setShowNight] = useState(false)
   const [selection, setSelection] = useState<Selection | null>(null)
 
@@ -186,7 +197,15 @@ export function WeekMatrix({ weekly, onChange }: WeekMatrixProps) {
             {weekdays.map((weekday, day) => {
               const selected = selection && contains(selection, day, row)
               const open = selected ? selection.open : weekly[day][row]
-              return (
+              const from = row * cellMinutes
+              const here = marks.filter(
+                (mark) =>
+                  mark.day === day &&
+                  mark.from < from + cellMinutes &&
+                  from < mark.to,
+              )
+              const conflict = here.some((mark) => mark.outside)
+              const cell = (
                 <Box
                   key={weekday.key}
                   onMouseDown={(event) => {
@@ -219,13 +238,41 @@ export function WeekMatrix({ weekly, onChange }: WeekMatrixProps) {
                         ? '1px solid var(--mantine-color-default-border)'
                         : '1px dashed var(--mantine-color-default-border)',
                     borderLeft: '1px solid var(--mantine-color-default-border)',
+                    boxShadow:
+                      here.length > 0
+                        ? `inset 4px 0 0 var(--mantine-color-${conflict ? 'orange' : 'teal'}-5)`
+                        : undefined,
                   }}
                 />
+              )
+              return here.length > 0 ? (
+                <Tooltip
+                  key={weekday.key}
+                  label={here.map(({ booking }) => (
+                    <div key={booking.id}>
+                      {formatSlotTime(booking, timeZone)} · {booking.name}
+                    </div>
+                  ))}
+                >
+                  {cell}
+                </Tooltip>
+              ) : (
+                cell
               )
             })}
           </div>
         ))}
       </Box>
+      <Group gap="md" mt="sm">
+        <Group gap={4}>
+          <Box w={10} h={10} bg="teal.5" />
+          <Text size="xs">бронирование</Text>
+        </Group>
+        <Group gap={4}>
+          <Box w={10} h={10} bg="orange.5" />
+          <Text size="xs">бронирование вне доступного времени</Text>
+        </Group>
+      </Group>
     </Paper>
   )
 }

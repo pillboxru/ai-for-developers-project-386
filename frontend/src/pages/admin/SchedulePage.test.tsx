@@ -135,7 +135,10 @@ describe('редактор расписания', () => {
     serveEditor({
       schedule: {
         ...defaultSchedule,
-        weekly: { ...defaultWeekly, sunday: [{ start: '23:00', end: '24:00' }] },
+        weekly: {
+          ...defaultWeekly,
+          sunday: [{ start: '23:00', end: '24:00' }],
+        },
       },
     })
     await openEditor()
@@ -241,6 +244,253 @@ describe('редактор расписания', () => {
       expect(isOpen('Среда', '09:00')).toBe(false)
       expect(isOpen('Среда', '17:30')).toBe(false)
       expect(isOpen('Четверг', '09:00')).toBe(true)
+    })
+  })
+
+  describe('черновик', () => {
+    const saveButton = () => screen.getByRole('button', { name: 'Сохранить' })
+    const cancelButton = () => screen.getByRole('button', { name: 'Отменить' })
+
+    it('без правок кнопки выключены, правка включает их', async () => {
+      serveEditor()
+      await openEditor()
+
+      expect(saveButton()).toBeDisabled()
+      expect(cancelButton()).toBeDisabled()
+
+      dayMenu('Среда', 'Очистить день')
+
+      expect(
+        screen.getByText('Есть несохранённые изменения'),
+      ).toBeInTheDocument()
+      expect(saveButton()).toBeEnabled()
+      expect(cancelButton()).toBeEnabled()
+    })
+
+    it('«Отменить» возвращает сохранённое расписание', async () => {
+      serveEditor()
+      await openEditor()
+      dayMenu('Среда', 'Очистить день')
+
+      fireEvent.click(cancelButton())
+
+      expect(isOpen('Среда', '09:00')).toBe(true)
+      expect(saveButton()).toBeDisabled()
+      expect(
+        screen.queryByText('Есть несохранённые изменения'),
+      ).not.toBeInTheDocument()
+    })
+
+    it('«Сохранить» отправляет неделю промежутками и исключения, уведомляет', async () => {
+      const overrides = [
+        { date: '2026-10-30', ranges: [] },
+        { date: '2026-11-20', ranges: [{ start: '10:00', end: '12:00' }] },
+      ]
+      const sent: UpdateSchedule[] = []
+      serveEditor({ schedule: { ...defaultSchedule, overrides } })
+      server.use(
+        handleUpdateSchedule(async ({ request }) => {
+          const body = await request.json()
+          sent.push(body)
+          return HttpResponse.json({ ...body, bookingWindow })
+        }),
+      )
+      await openEditor()
+      dayMenu('Среда', 'Очистить день')
+      // Суббота 10:00–11:00 и 11:00–12:00 сливаются в один промежуток
+      drag(cell('Суббота', '10:00'), cell('Суббота', '10:30'))
+      drag(cell('Суббота', '11:00'), cell('Суббота', '11:30'))
+      drag(cell('Воскресенье', '22:00'), cell('Воскресенье', '22:30'))
+      fireEvent.click(screen.getByRole('switch', { name: 'Ночные часы' }))
+      drag(cell('Воскресенье', '23:00'), cell('Воскресенье', '23:30'))
+
+      fireEvent.click(saveButton())
+
+      expect(
+        await screen.findByText('Расписание сохранено'),
+      ).toBeInTheDocument()
+      expect(sent).toEqual([
+        {
+          weekly: {
+            ...defaultWeekly,
+            wednesday: [],
+            saturday: [{ start: '10:00', end: '12:00' }],
+            sunday: [{ start: '22:00', end: '24:00' }],
+          },
+          overrides,
+        },
+      ])
+      expect(saveButton()).toBeDisabled()
+      expect(isOpen('Суббота', '11:30')).toBe(true)
+    })
+
+    it('сбой сохранения: уведомление, черновик остаётся', async () => {
+      serveEditor()
+      server.use(
+        handleUpdateSchedule(() =>
+          HttpResponse.json<ApiError>(
+            { code: 'internal_error', message: 'Внутренняя ошибка сервера' },
+            { status: 500 },
+          ),
+        ),
+      )
+      await openEditor()
+      dayMenu('Среда', 'Очистить день')
+
+      fireEvent.click(saveButton())
+
+      expect(
+        await screen.findByText('Не удалось сохранить. Попробуйте ещё раз.'),
+      ).toBeInTheDocument()
+      expect(isOpen('Среда', '09:00')).toBe(false)
+      expect(saveButton()).toBeEnabled()
+    })
+  })
+
+  it('полоски предстоящих бронирований окна записи на датах без исключений, с подсказкой', async () => {
+    serveEditor({
+      schedule: {
+        ...defaultSchedule,
+        overrides: [
+          { date: '2026-11-05', ranges: [{ start: '10:00', end: '11:00' }] },
+        ],
+      },
+      bookings: [
+        booking(),
+        // Вторник 10 ноября, 10:00–11:00 по Москве
+        booking({
+          start: '2026-11-10T07:00:00Z',
+          end: '2026-11-10T08:00:00Z',
+          name: 'Мария Котова',
+        }),
+        booking({
+          start: '2026-11-04T07:00:00Z',
+          end: '2026-11-04T07:30:00Z',
+          name: 'Отменённый гость',
+          cancelled: true,
+        }),
+        // Четверг 5 ноября — дата с исключением
+        booking({
+          start: '2026-11-05T07:00:00Z',
+          end: '2026-11-05T07:30:00Z',
+          name: 'Гость в исключении',
+        }),
+        // Пятница 20 ноября — за окном записи
+        booking({
+          start: '2026-11-20T07:00:00Z',
+          end: '2026-11-20T07:30:00Z',
+          name: 'Гость за окном',
+        }),
+      ],
+    })
+    await openEditor()
+
+    fireEvent.mouseEnter(cell('Вторник', '10:00'))
+    expect(
+      await screen.findByText('вт, 3 ноября, 10:00–10:30 · Иван Петров'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('вт, 10 ноября, 10:00–11:00 · Мария Котова'),
+    ).toBeInTheDocument()
+    fireEvent.mouseLeave(cell('Вторник', '10:00'))
+
+    fireEvent.mouseEnter(cell('Вторник', '10:30'))
+    await waitFor(() =>
+      expect(screen.queryByText(/Иван Петров/)).not.toBeInTheDocument(),
+    )
+    expect(screen.getByText(/Мария Котова/)).toBeInTheDocument()
+
+    for (const [day, time] of [
+      ['Среда', '10:00'],
+      ['Четверг', '10:00'],
+      ['Пятница', '10:00'],
+    ]) {
+      fireEvent.mouseEnter(cell(day, time))
+    }
+    expect(screen.queryByText(/Отменённый гость/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Гость в исключении/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Гость за окном/)).not.toBeInTheDocument()
+  })
+
+  describe('конфликт с бронированиями', () => {
+    const line = 'вт, 3 ноября, 10:00–10:30 — Иван Петров (Консультация)'
+    const alertTitle =
+      'Так сохранить нельзя: бронирования окажутся вне доступного времени'
+
+    it('черновик конфликтует: Alert со списком, «Сохранить» открывает «Сохранить нельзя» без запроса', async () => {
+      serveEditor({
+        bookings: [
+          booking(),
+          booking({ name: 'Отменённый гость', cancelled: true }),
+        ],
+      })
+      await openEditor()
+      expect(screen.queryByText(alertTitle)).not.toBeInTheDocument()
+
+      dayMenu('Вторник', 'Очистить день')
+
+      const alert = screen.getByRole('alert')
+      expect(within(alert).getByText(alertTitle)).toBeInTheDocument()
+      expect(within(alert).getByText(line)).toBeInTheDocument()
+      expect(
+        within(alert).queryByText(/Отменённый гость/),
+      ).not.toBeInTheDocument()
+
+      // Хендлера сохранения нет: запрос уронил бы тест
+      fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+      const dialog = await screen.findByRole('dialog', {
+        name: 'Сохранить нельзя',
+      })
+      expect(within(dialog).getByText(line)).toBeInTheDocument()
+
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Понятно' }))
+      await waitFor(() =>
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+      )
+      expect(isOpen('Вторник', '10:00')).toBe(false)
+    })
+
+    it('черновик, который снова оставляет время бронированию, убирает Alert', async () => {
+      serveEditor({ bookings: [booking()] })
+      await openEditor()
+      dayMenu('Вторник', 'Очистить день')
+
+      drag(cell('Вторник', '10:00'), cell('Вторник', '10:00'))
+
+      expect(screen.queryByText(alertTitle)).not.toBeInTheDocument()
+    })
+
+    it('409 от сервера: «Сохранить нельзя» со списком сервера, бронирования перечитываются', async () => {
+      const known: Booking[] = []
+      serveEditor()
+      server.use(
+        handleListBookings(() => HttpResponse.json(known)),
+        handleUpdateSchedule(() => {
+          // Гость успел забронировать, пока владелец правил черновик
+          known.push(booking())
+          return HttpResponse.json<ApiError>(
+            {
+              code: 'schedule_conflicts_with_bookings',
+              message: 'Бронирования окажутся вне доступного времени.',
+              bookings: known,
+            },
+            { status: 409 },
+          )
+        }),
+      )
+      await openEditor()
+      dayMenu('Вторник', 'Очистить день')
+
+      fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+
+      const dialog = await screen.findByRole('dialog', {
+        name: 'Сохранить нельзя',
+      })
+      expect(within(dialog).getByText(line)).toBeInTheDocument()
+      expect(await screen.findByText(alertTitle)).toBeInTheDocument()
+      expect(
+        screen.queryByText('Не удалось сохранить. Попробуйте ещё раз.'),
+      ).not.toBeInTheDocument()
     })
   })
 })
