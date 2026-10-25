@@ -193,13 +193,18 @@ export function computeSlots({
       // смещению (disambiguation 'compatible' по умолчанию)
       const zonedStart = start.toZonedDateTime(timeZone)
       const zonedEnd = zonedStart.add(duration)
-      // При переводе вперёд часы на стене уходят дальше, чем прошло времени.
-      // Такой слот начинается в несуществующем часе или пересекает его
+      // Несуществующее время 'compatible' сдвигает вперёд, поэтому начало в
+      // пропущенном при переводе вперёд часе не совпадает с сеткой
+      if (!zonedStart.toPlainDateTime().equals(start)) {
+        continue
+      }
+      // Перевод вперёд строго внутри звонка: слот пересекает несуществующий
+      // час. Слот, который кончается ровно в момент перевода, его не задевает
+      const transition = zonedStart.getTimeZoneTransition('next')
       if (
-        Temporal.PlainDateTime.compare(
-          zonedEnd.toPlainDateTime(),
-          start.add(duration),
-        ) > 0
+        transition &&
+        transition.offsetNanoseconds > zonedStart.offsetNanoseconds &&
+        Temporal.ZonedDateTime.compare(transition, zonedEnd) < 0
       ) {
         continue
       }
