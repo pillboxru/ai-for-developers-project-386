@@ -26,6 +26,11 @@ export type CreateBookingResult =
   | { kind: 'not_found' }
   | { kind: 'slot_unavailable' }
 
+export type CancelBookingResult =
+  | { kind: 'cancelled'; booking: Booking }
+  | { kind: 'not_found' }
+  | { kind: 'booking_ended' }
+
 // Конец не хранится: начало плюс длительность типа (ADR 0002)
 export function toBooking(
   record: BookingRecord,
@@ -49,22 +54,39 @@ export function toBooking(
   }
 }
 
+function eventTypeOf(
+  record: BookingRecord,
+  eventTypes: EventTypeRepository,
+): EventTypeRecord {
+  const eventType = eventTypes.get(record.eventTypeId)
+  // Тип с бронированиями не удаляется: без него конец бронирования не из
+  // чего вычислить (ADR 0002)
+  if (!eventType) {
+    throw new Error(
+      `Бронирование ${record.id} ссылается на несуществующий тип события ${record.eventTypeId}`,
+    )
+  }
+  return eventType
+}
+
 // Бронирования всех типов в порядке создания, с концом по длительности типа
 export function listAllBookings(
   bookings: BookingRepository,
   eventTypes: EventTypeRepository,
 ): Booking[] {
-  return bookings.list().map((record) => {
-    const eventType = eventTypes.get(record.eventTypeId)
-    // Тип с бронированиями не удаляется: без него конец бронирования не из
-    // чего вычислить (ADR 0002)
-    if (!eventType) {
-      throw new Error(
-        `Бронирование ${record.id} ссылается на несуществующий тип события ${record.eventTypeId}`,
-      )
-    }
-    return toBooking(record, eventType)
-  })
+  return bookings
+    .list()
+    .map((record) => toBooking(record, eventTypeOf(record, eventTypes)))
+}
+
+// Предстоящее: звонок ещё не закончился, идущий сейчас тоже. Конец не входит
+function isUpcoming(booking: Booking, now: Date): boolean {
+  return (
+    Temporal.Instant.compare(
+      Temporal.Instant.from(booking.end),
+      Temporal.Instant.fromEpochMilliseconds(now.getTime()),
+    ) > 0
+  )
 }
 
 export type BookingService = ReturnType<typeof createBookingService>
@@ -82,15 +104,9 @@ export function createBookingService({
     // Сортировка устойчивая: на одном начале отменённое стоит раньше
     // созданного после него
     listUpcoming: (): Booking[] => {
-      const current = Temporal.Instant.fromEpochMilliseconds(now().getTime())
+      const current = now()
       return listAllBookings(bookings, eventTypes)
-        .filter(
-          (booking) =>
-            Temporal.Instant.compare(
-              Temporal.Instant.from(booking.end),
-              current,
-            ) > 0,
-        )
+        .filter((booking) => isUpcoming(booking, current))
         .sort((a, b) =>
           Temporal.Instant.compare(
             Temporal.Instant.from(a.start),
@@ -134,6 +150,25 @@ export function createBookingService({
       }
       bookings.insert(record)
       return { kind: 'created', booking: toBooking(record, eventType) }
+    },
+
+    cancel: (bookingId: string): CancelBookingResult => {
+      const record = bookings.get(bookingId)
+      if (!record) {
+        return { kind: 'not_found' }
+      }
+      const eventType = eventTypeOf(record, eventTypes)
+      // Повтор (двойной щелчок, второе окно) отвечает уже отменённым, даже
+      // если звонок успел закончиться: отмена состоялась. Вернуть её нельзя
+      if (record.cancelled) {
+        return { kind: 'cancelled', booking: toBooking(record, eventType) }
+      }
+      if (!isUpcoming(toBooking(record, eventType), now())) {
+        return { kind: 'booking_ended' }
+      }
+      const cancelled: BookingRecord = { ...record, cancelled: true }
+      bookings.update(cancelled)
+      return { kind: 'cancelled', booking: toBooking(cancelled, eventType) }
     },
   }
 }

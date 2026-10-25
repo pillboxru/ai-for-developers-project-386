@@ -11,7 +11,10 @@ export type BookingRecord = Pick<
 export interface BookingRepository {
   // В порядке создания
   list(): BookingRecord[]
+  get(id: Uuid): BookingRecord | undefined
   insert(record: BookingRecord): void
+  // Заменяет запись с тем же id, место в порядке создания сохраняется
+  update(record: BookingRecord): void
 }
 
 // Хранилище в памяти процесса (ADR 0001)
@@ -20,8 +23,13 @@ export function createBookingRepository(): BookingRepository {
 
   return {
     list: () => [...records],
+    get: (id) => records.find((record) => record.id === id),
     insert: (record) => {
       records.push(record)
+    },
+    update: (record) => {
+      const index = records.findIndex(({ id }) => id === record.id)
+      records[index] = record
     },
   }
 }

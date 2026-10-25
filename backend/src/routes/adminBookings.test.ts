@@ -3,6 +3,7 @@ import type {
   Booking,
   CreateBooking,
   CreateEventType,
+  SlotList,
 } from '../generated/types.gen.js'
 import { buildTestApp, testNow } from '../test/buildTestApp.js'
 
@@ -34,6 +35,14 @@ async function book(app: TestApp, eventTypeId: string, input: CreateBooking) {
     payload: input,
   })
   expect(response.statusCode).toBe(201)
+  return response.json<Booking>()
+}
+
+function cancel(app: TestApp, bookingId: string) {
+  return app.inject({
+    method: 'POST',
+    url: `/api/admin/bookings/${bookingId}/cancel`,
+  })
 }
 
 async function listBookings(app: TestApp) {
@@ -43,6 +52,15 @@ async function listBookings(app: TestApp) {
   })
   expect(response.statusCode).toBe(200)
   return response.json<Booking[]>()
+}
+
+async function slotStarts(app: TestApp, eventTypeId: string) {
+  const response = await app.inject({
+    method: 'GET',
+    url: `/api/event-types/${eventTypeId}/slots`,
+  })
+  expect(response.statusCode).toBe(200)
+  return response.json<SlotList>().slots.map((slot) => slot.start)
 }
 
 const guest = { name: 'Иван Петров', email: 'ivan@example.com' }
@@ -119,5 +137,120 @@ describe('GET /api/admin/bookings', () => {
     // Конец не входит: в 10:30 звонок уже закончился
     now = new Date('2026-11-03T07:30:00Z')
     expect(await listBookings(app)).toEqual([])
+  })
+})
+
+describe('POST /api/admin/bookings/:bookingId/cancel', () => {
+  it('отменяет предстоящее бронирование', async () => {
+    const app = buildTestApp()
+    const eventTypeId = await createEventType(app)
+    // Вторник 3 ноября, 10:00–10:30 по Москве
+    const booking = await book(app, eventTypeId, {
+      start: '2026-11-03T07:00:00Z',
+      ...guest,
+    })
+
+    const response = await cancel(app, booking.id)
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toEqual({ ...booking, cancelled: true })
+  })
+
+  it('нет бронирования — 404', async () => {
+    const app = buildTestApp()
+
+    const response = await cancel(app, '3f1c2d4e-5a6b-4c7d-8e9f-0a1b2c3d4e5f')
+
+    expect(response.statusCode).toBe(404)
+    expect(response.json()).toEqual({
+      code: 'not_found',
+      message: 'Не найдено',
+    })
+  })
+
+  it('id не UUID — 400', async () => {
+    const app = buildTestApp()
+
+    const response = await cancel(app, 'not-a-uuid')
+
+    expect(response.statusCode).toBe(400)
+    expect(response.json()).toEqual({
+      code: 'validation_error',
+      message: expect.any(String),
+    })
+  })
+
+  it('идущий звонок можно отменить, закончившийся — 409', async () => {
+    let now = testNow
+    const app = buildTestApp({ now: () => now })
+    const eventTypeId = await createEventType(app)
+    // Вторник 3 ноября, 10:00–10:30 и 11:00–11:30 по Москве
+    const ongoing = await book(app, eventTypeId, {
+      start: '2026-11-03T07:00:00Z',
+      ...guest,
+    })
+    const ended = await book(app, eventTypeId, {
+      start: '2026-11-03T08:00:00Z',
+      ...guest,
+    })
+
+    now = new Date('2026-11-03T07:29:59Z')
+    const cancelOngoing = await cancel(app, ongoing.id)
+    expect(cancelOngoing.statusCode).toBe(200)
+    expect(cancelOngoing.json()).toMatchObject({ cancelled: true })
+
+    // Конец не входит: в 11:30 звонок уже закончился
+    now = new Date('2026-11-03T08:30:00Z')
+    const cancelEnded = await cancel(app, ended.id)
+    expect(cancelEnded.statusCode).toBe(409)
+    expect(cancelEnded.json()).toEqual({
+      code: 'booking_ended',
+      message: 'Бронирование уже закончилось',
+    })
+  })
+
+  it('повторная отмена — 200 с уже отменённым, даже если звонок закончился', async () => {
+    let now = testNow
+    const app = buildTestApp({ now: () => now })
+    const eventTypeId = await createEventType(app)
+    // Вторник 3 ноября, 10:00–10:30 по Москве
+    const booking = await book(app, eventTypeId, {
+      start: '2026-11-03T07:00:00Z',
+      ...guest,
+    })
+    await cancel(app, booking.id)
+
+    const again = await cancel(app, booking.id)
+    expect(again.statusCode).toBe(200)
+    expect(again.json()).toEqual({ ...booking, cancelled: true })
+
+    // Второй щелчок мог дойти уже после конца звонка: отмена всё равно
+    // состоялась, и ошибка владельца бы запутала
+    now = new Date('2026-11-03T07:30:00Z')
+    const afterEnd = await cancel(app, booking.id)
+    expect(afterEnd.statusCode).toBe(200)
+    expect(afterEnd.json()).toEqual({ ...booking, cancelled: true })
+  })
+
+  it('время снова свободно, отменённое остаётся в списке рядом с новым', async () => {
+    const app = buildTestApp()
+    const eventTypeId = await createEventType(app)
+    // Вторник 3 ноября, 10:00–10:30 по Москве
+    const start = '2026-11-03T07:00:00Z'
+    const booking = await book(app, eventTypeId, { start, ...guest })
+    expect(await slotStarts(app, eventTypeId)).not.toContain(start)
+
+    await cancel(app, booking.id)
+
+    expect(await slotStarts(app, eventTypeId)).toContain(start)
+    const rebooked = await book(app, eventTypeId, {
+      start,
+      name: 'Мария',
+      email: 'maria@example.com',
+    })
+    expect(await listBookings(app)).toEqual([
+      { ...booking, cancelled: true },
+      rebooked,
+    ])
   })
 })
