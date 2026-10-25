@@ -13,7 +13,8 @@ export interface BookingRepository {
   list(): BookingRecord[]
   get(id: Uuid): BookingRecord | undefined
   insert(record: BookingRecord): void
-  // Заменяет запись с тем же id, место в порядке создания сохраняется
+  // Заменяет запись с тем же id, место в порядке создания сохраняется.
+  // Записи с таким id нет — бросает
   update(record: BookingRecord): void
   delete(id: Uuid): void
 }
@@ -30,6 +31,11 @@ export function createBookingRepository(): BookingRepository {
     },
     update: (record) => {
       const index = records.findIndex(({ id }) => id === record.id)
+      // Сервис обновляет только найденное бронирование, так что промах —
+      // ошибка в коде, а records[-1] спрятал бы её мусорным свойством
+      if (index === -1) {
+        throw new Error(`Бронирования ${record.id} нет в хранилище`)
+      }
       records[index] = record
     },
     delete: (id) => {
