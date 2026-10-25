@@ -1,6 +1,7 @@
 import { Temporal } from 'temporal-polyfill'
 import type {
   Booking,
+  BookingWindow,
   EventType,
   Slot,
   SlotList,
@@ -13,7 +14,7 @@ import type {
   ScheduleRecord,
   ScheduleRepository,
 } from '../repositories/schedule.js'
-import { toBooking } from './bookings.js'
+import { listBookings } from './bookings.js'
 
 export interface SlotInput {
   eventType: Pick<EventType, 'durationMinutes' | 'slotStepMinutes'>
@@ -41,7 +42,7 @@ type Weekday = keyof Pick<
 >
 
 // Индекс — dayOfWeek из Temporal минус один: 1 — понедельник, 7 — воскресенье
-const weekdays: Weekday[] = [
+export const weekdays: Weekday[] = [
   'monday',
   'tuesday',
   'wednesday',
@@ -99,6 +100,57 @@ function availablePieces(
   return pieces
 }
 
+// Входит ли промежуток целиком в доступное время. Куски склеены через
+// полночь, поэтому звонок с 23:30 до 00:30 помещается в стык 24:00 и 00:00
+export function isWithinAvailability(
+  availability: ScheduleRecord,
+  interval: Pick<Booking, 'start' | 'end'>,
+  timeZone: string,
+) {
+  const start = Temporal.Instant.from(interval.start)
+  const end = Temporal.Instant.from(interval.end)
+  const dateOf = (instant: Temporal.Instant) =>
+    instant.toZonedDateTimeISO(timeZone).toPlainDate()
+  // С предыдущей даты: кусок мог начаться до полуночи
+  return availablePieces(
+    availability,
+    dateOf(start).subtract({ days: 1 }),
+    dateOf(end),
+  ).some(
+    (piece) =>
+      Temporal.Instant.compare(
+        piece.start.toZonedDateTime(timeZone).toInstant(),
+        start,
+      ) <= 0 &&
+      Temporal.Instant.compare(
+        end,
+        piece.end.toZonedDateTime(timeZone).toInstant(),
+      ) <= 0,
+  )
+}
+
+// Сегодняшняя дата по часам владельца
+export function todayIn(now: Date, timeZone: string) {
+  return Temporal.Instant.fromEpochMilliseconds(now.getTime())
+    .toZonedDateTimeISO(timeZone)
+    .toPlainDate()
+}
+
+export function bookingWindowAt(now: Date, timeZone: string): BookingWindow {
+  const today = todayIn(now, timeZone)
+  // PlainDate.toZonedDateTime без времени даёт начало дня, а не 00:00: в
+  // некоторых поясах переход на летнее время выпадает на полночь, и 00:00
+  // в этот день не существует
+  return {
+    start: today.toZonedDateTime(timeZone).toInstant().toString(),
+    end: today
+      .add({ days: windowDays })
+      .toZonedDateTime(timeZone)
+      .toInstant()
+      .toString(),
+  }
+}
+
 export function computeSlots({
   eventType,
   availability,
@@ -108,12 +160,7 @@ export function computeSlots({
 }: SlotInput): SlotList {
   const nowInstant = Temporal.Instant.fromEpochMilliseconds(now.getTime())
   const earliestStart = nowInstant.add(minimumNotice)
-  const today = nowInstant.toZonedDateTimeISO(timeZone).toPlainDate()
-  // PlainDate.toZonedDateTime без времени даёт начало дня, а не 00:00: в
-  // некоторых поясах переход на летнее время выпадает на полночь, и 00:00
-  // в этот день не существует
-  const windowStart = today.toZonedDateTime(timeZone)
-  const windowEnd = today.add({ days: windowDays }).toZonedDateTime(timeZone)
+  const today = todayIn(now, timeZone)
 
   // Бронирования любых типов; отменённые время не занимают
   const busy = bookings
@@ -174,13 +221,7 @@ export function computeSlots({
     }
   }
 
-  return {
-    bookingWindow: {
-      start: windowStart.toInstant().toString(),
-      end: windowEnd.toInstant().toString(),
-    },
-    slots,
-  }
+  return { bookingWindow: bookingWindowAt(now, timeZone), slots }
 }
 
 export interface SlotServiceDeps {
@@ -201,27 +242,14 @@ export function createSlotService({
   now,
   timeZone,
 }: SlotServiceDeps) {
-  // Бронирования всех типов: неотменённые не пересекаются, даже если у них
-  // разные типы событий
-  const allBookings = () =>
-    bookings.list().map((record) => {
-      const eventType = eventTypes.get(record.eventTypeId)
-      // Тип с бронированиями не удаляется: без него конец бронирования не из
-      // чего вычислить (ADR 0002)
-      if (!eventType) {
-        throw new Error(
-          `Бронирование ${record.id} ссылается на несуществующий тип события ${record.eventTypeId}`,
-        )
-      }
-      return toBooking(record, eventType)
-    })
-
   return {
     listSlots: (eventType: SlotInput['eventType']): SlotList =>
       computeSlots({
         eventType,
         availability: schedule.get(),
-        bookings: allBookings(),
+        // Бронирования всех типов: неотменённые не пересекаются, даже если у
+        // них разные типы событий
+        bookings: listBookings(bookings, eventTypes),
         now: now(),
         timeZone,
       }),

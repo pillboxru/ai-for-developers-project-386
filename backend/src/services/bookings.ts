@@ -5,14 +5,20 @@ import type {
   BookingRecord,
   BookingRepository,
 } from '../repositories/bookings.js'
-import type { EventTypeRecord } from '../repositories/eventTypes.js'
+import type {
+  EventTypeRecord,
+  EventTypeRepository,
+} from '../repositories/eventTypes.js'
 import type { EventTypeService } from './eventTypes.js'
 import type { SlotService } from './slots.js'
 
 export interface BookingServiceDeps {
   bookings: BookingRepository
+  // Конец бронирования считается по длительности его типа (ADR 0002)
+  eventTypes: EventTypeRepository
   eventTypeService: EventTypeService
   slotService: SlotService
+  now: () => Date
 }
 
 export type CreateBookingResult =
@@ -43,14 +49,54 @@ export function toBooking(
   }
 }
 
+// Все бронирования всех типов в порядке создания, с концом по типу
+export function listBookings(
+  bookings: BookingRepository,
+  eventTypes: EventTypeRepository,
+): Booking[] {
+  return bookings.list().map((record) => {
+    const eventType = eventTypes.get(record.eventTypeId)
+    // Тип с бронированиями не удаляется: без него конец бронирования не из
+    // чего вычислить (ADR 0002)
+    if (!eventType) {
+      throw new Error(
+        `Бронирование ${record.id} ссылается на несуществующий тип события ${record.eventTypeId}`,
+      )
+    }
+    return toBooking(record, eventType)
+  })
+}
+
 export type BookingService = ReturnType<typeof createBookingService>
 
 export function createBookingService({
   bookings,
+  eventTypes,
   eventTypeService,
   slotService,
+  now,
 }: BookingServiceDeps) {
   return {
+    // Предстоящие — звонок ещё не закончился, в том числе идущий сейчас.
+    // Отменённые тоже: их видит владелец в списке бронирований
+    listUpcoming: (): Booking[] => {
+      const current = Temporal.Instant.fromEpochMilliseconds(now().getTime())
+      return listBookings(bookings, eventTypes)
+        .filter(
+          (booking) =>
+            Temporal.Instant.compare(
+              Temporal.Instant.from(booking.end),
+              current,
+            ) > 0,
+        )
+        .sort((a, b) =>
+          Temporal.Instant.compare(
+            Temporal.Instant.from(a.start),
+            Temporal.Instant.from(b.start),
+          ),
+        )
+    },
+
     // Принимается только начало одного из слотов, которые та же функция
     // вычисляет сейчас. Причину отказа гостю не различаем (14.1): занято,
     // прошёл запас, закрыто владельцем или не на сетке — исход один

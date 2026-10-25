@@ -6,6 +6,8 @@ export type ScheduleRecord = Pick<UpdateSchedule, 'weekly' | 'overrides'>
 
 export interface ScheduleRepository {
   get(): ScheduleRecord
+  // Заменяет расписание и исключения целиком: сохранение атомарно
+  replace(record: ScheduleRecord): void
 }
 
 const workday = (): TimeRange[] => [{ start: '09:00', end: '18:00' }]
@@ -27,9 +29,12 @@ const defaultSchedule = (): ScheduleRecord => ({
 
 // Хранилище в памяти процесса (ADR 0001): одно расписание на приложение
 export function createScheduleRepository(): ScheduleRepository {
-  const schedule = defaultSchedule()
+  let schedule = defaultSchedule()
 
   return {
     get: () => schedule,
+    replace: (record) => {
+      schedule = record
+    },
   }
 }

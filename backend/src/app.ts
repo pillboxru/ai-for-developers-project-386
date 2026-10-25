@@ -15,9 +15,11 @@ import { bookingHandlers } from './routes/bookings.js'
 import { eventTypeHandlers } from './routes/eventTypes.js'
 import { healthHandlers } from './routes/health.js'
 import { ownerHandlers } from './routes/owner.js'
+import { scheduleHandlers } from './routes/schedule.js'
 import { slotHandlers } from './routes/slots.js'
 import { createBookingService } from './services/bookings.js'
 import { createEventTypeService } from './services/eventTypes.js'
+import { createScheduleService } from './services/schedule.js'
 import { createSlotService } from './services/slots.js'
 
 // Собранный контракт лежит на том же расстоянии от src/ и от dist/, а в
@@ -66,9 +68,10 @@ export function buildApp({
   // Хранилище своё у каждого приложения: тесты не делят данные
   const eventTypes = createEventTypeRepository()
   const bookings = createBookingRepository()
+  const schedule = createScheduleRepository()
   const eventTypeService = createEventTypeService({ eventTypes })
   const slotService = createSlotService({
-    schedule: createScheduleRepository(),
+    schedule,
     bookings,
     eventTypes,
     now,
@@ -76,8 +79,16 @@ export function buildApp({
   })
   const bookingService = createBookingService({
     bookings,
+    eventTypes,
     eventTypeService,
     slotService,
+    now,
+  })
+  const scheduleService = createScheduleService({
+    schedule,
+    bookingService,
+    now,
+    timeZone: ownerTimeZone,
   })
 
   const app = Fastify({
@@ -125,6 +136,7 @@ export function buildApp({
       ...adminEventTypeHandlers(eventTypeService),
       ...slotHandlers({ eventTypeService, slotService }),
       ...bookingHandlers(bookingService),
+      ...scheduleHandlers(scheduleService),
     },
   })
 

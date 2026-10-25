@@ -13,17 +13,20 @@ function services() {
   const eventTypes = createEventTypeRepository()
   const bookings = createBookingRepository()
   const eventTypeService = createEventTypeService({ eventTypes })
+  const now = () => new Date('2026-11-02T06:00:00Z')
   const slotService = createSlotService({
     schedule: createScheduleRepository(),
     bookings,
     eventTypes,
-    now: () => new Date('2026-11-02T06:00:00Z'),
+    now,
     timeZone: 'Europe/Moscow',
   })
   const bookingService = createBookingService({
     bookings,
+    eventTypes,
     eventTypeService,
     slotService,
+    now,
   })
   return { eventTypeService, slotService, bookingService }
 }

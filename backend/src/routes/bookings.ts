@@ -10,7 +10,9 @@ const slotUnavailable: ApiError = {
 
 export const bookingHandlers = (
   bookingService: BookingService,
-): Pick<RouteHandlers, 'createBooking'> => ({
+): Pick<RouteHandlers, 'createBooking' | 'listBookings'> => ({
+  listBookings: async (_request, reply) =>
+    reply.code(200).send(bookingService.listUpcoming()),
   createBooking: async (request, reply) => {
     const result = bookingService.create(
       request.params.eventTypeId,

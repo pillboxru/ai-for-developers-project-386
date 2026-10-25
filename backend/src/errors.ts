@@ -11,6 +11,19 @@ export function sendNotFound(reply: FastifyReply) {
   return reply.code(404).send(body)
 }
 
+// Ошибки полей тела: от Ajv и от правил сервиса, которые схемой не выразить
+export function sendValidationError(
+  reply: FastifyReply,
+  fieldErrors: FieldError[],
+) {
+  const body: ApiError = {
+    code: 'validation_error',
+    message: 'Проверьте введённые данные',
+    fieldErrors,
+  }
+  return reply.code(400).send(body)
+}
+
 function fieldMessage({ keyword, params }: FastifySchemaValidationError) {
   switch (keyword) {
     case 'required':
@@ -70,14 +83,13 @@ export function apiErrorHandler(
   // validation есть и у ошибки проверки ответа (@fastify/response-validation),
   // но это ошибка сервера, а не запроса: у неё нет validationContext
   if (error.validation && error.validationContext) {
-    const body: ApiError =
-      error.validationContext === 'body'
-        ? {
-            code: 'validation_error',
-            message: 'Проверьте введённые данные',
-            fieldErrors: toFieldErrors(error.validation),
-          }
-        : { code: 'validation_error', message: 'Неверный адрес запроса' }
+    if (error.validationContext === 'body') {
+      return sendValidationError(reply, toFieldErrors(error.validation))
+    }
+    const body: ApiError = {
+      code: 'validation_error',
+      message: 'Неверный адрес запроса',
+    }
     return reply.code(400).send(body)
   }
 
