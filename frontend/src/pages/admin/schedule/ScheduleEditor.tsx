@@ -17,6 +17,7 @@ import {
 } from './scheduleDraft.ts'
 import { bookingMarks, outsideBookings } from './bookingMarks.ts'
 import { ConflictingBookings } from './ConflictingBookings.tsx'
+import { OverridesColumn } from './OverridesColumn.tsx'
 import { WeekMatrix } from './WeekMatrix.tsx'
 
 interface ScheduleEditorProps {
@@ -117,7 +118,15 @@ export function ScheduleEditor({
             timeZone={timeZone}
           />
         </Grid.Col>
-        {/* #55: справа колонка исключений, Grid.Col span={{ base: 12, md: 4 }} */}
+        <Grid.Col span={{ base: 12, md: 4 }}>
+          <OverridesColumn
+            overrides={draft.overrides}
+            onChange={(overrides) => setDraft({ ...draft, overrides })}
+            bookingWindow={schedule.bookingWindow}
+            conflicts={conflicts}
+            timeZone={timeZone}
+          />
+        </Grid.Col>
       </Grid>
       <Modal
         opened={blocked !== null}

@@ -494,3 +494,294 @@ describe('редактор расписания', () => {
     })
   })
 })
+
+describe('исключения на даты', () => {
+  const column = () => screen.getByRole('region', { name: 'Исключения' })
+  const card = (date: string) =>
+    within(column()).getByRole('article', { name: date })
+
+  // Сохранение отвечает тем, что пришло: тела запросов копятся в sent
+  function serveSave() {
+    const sent: UpdateSchedule[] = []
+    server.use(
+      handleUpdateSchedule(async ({ request }) => {
+        const body = await request.json()
+        sent.push(body)
+        return HttpResponse.json({ ...body, bookingWindow })
+      }),
+    )
+    return sent
+  }
+
+  it('исключений нет: пустое состояние, кнопка добавления на месте', async () => {
+    serveEditor()
+    await openEditor()
+
+    expect(
+      within(column()).getByRole('heading', { name: 'Исключений нет' }),
+    ).toBeInTheDocument()
+    expect(
+      within(column()).getByText(
+        'Добавьте дату, на которую часы отличаются от расписания.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      within(column()).getByRole('button', { name: 'Добавить' }),
+    ).toBeInTheDocument()
+  })
+
+  it('карточки предстоящих исключений по дате; прошедшие свёрнуты и только для чтения', async () => {
+    serveEditor({
+      schedule: {
+        ...defaultSchedule,
+        overrides: [
+          { date: '2026-10-28', ranges: [] },
+          { date: '2026-11-02', ranges: [{ start: '12:00', end: '13:00' }] },
+          {
+            date: '2026-11-07',
+            ranges: [
+              { start: '10:00', end: '12:00' },
+              { start: '14:00', end: '15:00' },
+            ],
+          },
+          // Окно записи кончается 15 ноября по Москве
+          { date: '2026-11-15', ranges: [] },
+          { date: '2026-11-16', ranges: [] },
+        ],
+      },
+    })
+    await openEditor()
+
+    const cards = within(column()).getAllByRole('article')
+    expect(cards.map((card) => card.getAttribute('aria-label'))).toEqual([
+      'пн, 2 ноября',
+      'сб, 7 ноября',
+      'вс, 15 ноября',
+      'пн, 16 ноября',
+    ])
+    expect(within(cards[0]).getByText('12:00–13:00')).toBeInTheDocument()
+    expect(
+      within(cards[1]).getByText('10:00–12:00, 14:00–15:00'),
+    ).toBeInTheDocument()
+    expect(within(cards[2]).getByText('Закрыта')).toBeInTheDocument()
+    expect(
+      within(cards[3]).getByText('Закрыта · за окном записи'),
+    ).toBeInTheDocument()
+    expect(
+      within(cards[0]).getByRole('button', { name: 'Изменить' }),
+    ).toBeInTheDocument()
+    expect(
+      within(cards[0]).getByRole('button', { name: 'Удалить' }),
+    ).toBeInTheDocument()
+    expect(
+      within(column()).queryByRole('heading', { name: 'Исключений нет' }),
+    ).not.toBeInTheDocument()
+
+    expect(
+      within(column()).queryByRole('article', { name: 'ср, 28 октября' }),
+    ).not.toBeInTheDocument()
+    fireEvent.click(
+      within(column()).getByRole('button', { name: 'Прошедшие (1)' }),
+    )
+    const past = await within(column()).findByRole('article', {
+      name: 'ср, 28 октября',
+    })
+    expect(within(past).getByText('Закрыта')).toBeInTheDocument()
+    expect(within(past).queryByRole('button')).not.toBeInTheDocument()
+  })
+
+  it('«Удалить» убирает исключение из черновика, оно уходит при сохранении', async () => {
+    serveEditor({
+      schedule: {
+        ...defaultSchedule,
+        overrides: [
+          { date: '2026-11-04', ranges: [] },
+          { date: '2026-11-05', ranges: [] },
+        ],
+      },
+    })
+    const sent = serveSave()
+    await openEditor()
+
+    fireEvent.click(
+      within(card('ср, 4 ноября')).getByRole('button', { name: 'Удалить' }),
+    )
+
+    expect(
+      within(column()).queryByRole('article', { name: 'ср, 4 ноября' }),
+    ).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+    expect(await screen.findByText('Расписание сохранено')).toBeInTheDocument()
+    expect(sent.map((body) => body.overrides)).toEqual([
+      [{ date: '2026-11-05', ranges: [] }],
+    ])
+  })
+
+  it('модалка создания: несколько дат, прошедшие недоступны, даты с исключением подчёркнуты; «Закрыть дату»', async () => {
+    serveEditor({
+      schedule: {
+        ...defaultSchedule,
+        overrides: [
+          { date: '2026-11-05', ranges: [{ start: '10:00', end: '12:00' }] },
+          { date: '2026-11-10', ranges: [] },
+        ],
+      },
+    })
+    const sent = serveSave()
+    await openEditor()
+
+    fireEvent.click(within(column()).getByRole('button', { name: 'Добавить' }))
+    const dialog = within(
+      await screen.findByRole('dialog', { name: 'Новое исключение' }),
+    )
+    expect(dialog.getByRole('button', { name: '1 ноября 2026' })).toBeDisabled()
+    expect(dialog.getByRole('button', { name: '5 ноября 2026' })).toHaveStyle({
+      textDecoration: 'underline',
+    })
+    expect(
+      dialog.getByRole('button', { name: '4 ноября 2026' }),
+    ).not.toHaveStyle({ textDecoration: 'underline' })
+    expect(dialog.getByRole('button', { name: 'Готово' })).toBeDisabled()
+    expect(dialog.getByRole('radio', { name: 'Закрыть дату' })).toBeChecked()
+
+    fireEvent.click(dialog.getByRole('button', { name: '2 ноября 2026' }))
+    fireEvent.click(dialog.getByRole('button', { name: '5 ноября 2026' }))
+    fireEvent.click(dialog.getByRole('button', { name: 'Готово' }))
+
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    )
+    expect(
+      within(column())
+        .getAllByRole('article')
+        .map((article) => article.getAttribute('aria-label')),
+    ).toEqual(['пн, 2 ноября', 'чт, 5 ноября', 'вт, 10 ноября'])
+    expect(
+      within(card('чт, 5 ноября')).getByText('Закрыта'),
+    ).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+    expect(await screen.findByText('Расписание сохранено')).toBeInTheDocument()
+    expect(sent.map((body) => body.overrides)).toEqual([
+      [
+        { date: '2026-11-02', ranges: [] },
+        { date: '2026-11-05', ranges: [] },
+        { date: '2026-11-10', ranges: [] },
+      ],
+    ])
+  })
+
+  async function choose(
+    dialog: ReturnType<typeof within>,
+    select: HTMLElement,
+    option: string,
+  ) {
+    fireEvent.click(select)
+    fireEvent.click(await dialog.findByRole('option', { name: option }))
+  }
+
+  it('«Свои часы»: промежутки парами Select с шагом 30 минут', async () => {
+    serveEditor()
+    await openEditor()
+    fireEvent.click(within(column()).getByRole('button', { name: 'Добавить' }))
+    const dialog = within(
+      await screen.findByRole('dialog', { name: 'Новое исключение' }),
+    )
+    fireEvent.click(dialog.getByRole('button', { name: '7 ноября 2026' }))
+
+    fireEvent.click(dialog.getByRole('radio', { name: 'Свои часы' }))
+    const [start] = dialog.getAllByRole('combobox', { name: 'Начало' })
+    const [end] = dialog.getAllByRole('combobox', { name: 'Конец' })
+    expect(start).toHaveValue('09:00')
+    expect(end).toHaveValue('18:00')
+    fireEvent.click(start)
+    const starts = dialog.getAllByRole('option').map((o) => o.textContent)
+    expect(starts.slice(0, 3)).toEqual(['00:00', '00:30', '01:00'])
+    expect(starts.at(-1)).toBe('23:30')
+    fireEvent.click(dialog.getByRole('option', { name: '10:00' }))
+    await choose(dialog, end, '12:30')
+    fireEvent.click(dialog.getByRole('button', { name: 'Добавить промежуток' }))
+    const ends = dialog.getAllByRole('combobox', { name: 'Конец' })
+    await choose(dialog, ends[1], '24:00')
+    fireEvent.click(dialog.getByRole('button', { name: 'Готово' }))
+
+    expect(
+      await within(column()).findByText('10:00–12:30, 13:30–24:00'),
+    ).toBeInTheDocument()
+  })
+
+  it('правка: дата фиксирована, часы меняются', async () => {
+    serveEditor({
+      schedule: {
+        ...defaultSchedule,
+        overrides: [
+          { date: '2026-11-07', ranges: [{ start: '10:00', end: '12:00' }] },
+        ],
+      },
+    })
+    await openEditor()
+
+    fireEvent.click(
+      within(card('сб, 7 ноября')).getByRole('button', { name: 'Изменить' }),
+    )
+    const dialog = within(
+      await screen.findByRole('dialog', { name: 'Исключение: сб, 7 ноября' }),
+    )
+    expect(
+      dialog.queryByRole('button', { name: '7 ноября 2026' }),
+    ).not.toBeInTheDocument()
+    expect(dialog.getByRole('radio', { name: 'Свои часы' })).toBeChecked()
+    expect(dialog.getByRole('combobox', { name: 'Начало' })).toHaveValue(
+      '10:00',
+    )
+    fireEvent.click(dialog.getByRole('radio', { name: 'Закрыть дату' }))
+    fireEvent.click(dialog.getByRole('button', { name: 'Готово' }))
+
+    expect(
+      await within(card('сб, 7 ноября')).findByText('Закрыта'),
+    ).toBeInTheDocument()
+    expect(within(column()).getAllByRole('article')).toHaveLength(1)
+  })
+
+  it('исключение, которое закрывает время бронирования: Alert, бронирование в карточке, сохранить нельзя', async () => {
+    const line = 'вт, 3 ноября, 10:00–10:30 — Иван Петров (Консультация)'
+    serveEditor({
+      bookings: [
+        booking(),
+        // Тот же день, 15:00 по Москве: в часах исключения
+        booking({
+          start: '2026-11-03T12:00:00Z',
+          end: '2026-11-03T12:30:00Z',
+          name: 'Мария Котова',
+        }),
+      ],
+    })
+    await openEditor()
+    fireEvent.click(within(column()).getByRole('button', { name: 'Добавить' }))
+    const dialog = within(
+      await screen.findByRole('dialog', { name: 'Новое исключение' }),
+    )
+    fireEvent.click(dialog.getByRole('button', { name: '3 ноября 2026' }))
+    fireEvent.click(dialog.getByRole('radio', { name: 'Свои часы' }))
+    await choose(
+      dialog,
+      dialog.getByRole('combobox', { name: 'Начало' }),
+      '14:00',
+    )
+    fireEvent.click(dialog.getByRole('button', { name: 'Готово' }))
+
+    const alert = await screen.findByRole('alert')
+    expect(within(alert).getByText(line)).toBeInTheDocument()
+    expect(within(alert).queryByText(/Мария Котова/)).not.toBeInTheDocument()
+    expect(within(card('вт, 3 ноября')).getByText(line)).toBeInTheDocument()
+    expect(
+      within(card('вт, 3 ноября')).queryByText(/Мария Котова/),
+    ).not.toBeInTheDocument()
+
+    // Хендлера сохранения нет: запрос уронил бы тест
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+    expect(
+      await screen.findByRole('dialog', { name: 'Сохранить нельзя' }),
+    ).toBeInTheDocument()
+  })
+})

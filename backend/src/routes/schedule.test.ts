@@ -108,6 +108,36 @@ describe('PUT /api/admin/schedule', () => {
     expect(starts).toContain('2026-11-07T17:00:00Z')
   })
 
+  it('сохранённое исключение меняет слоты гостя на эту дату', async () => {
+    const app = buildTestApp()
+    const eventTypeId = await createEventType(app)
+
+    const response = await updateSchedule(app, {
+      weekly: defaultWeekly,
+      overrides: [
+        // Среда 4 ноября закрыта, суббота 7 ноября открыта 10:00–11:00
+        { date: '2026-11-04', ranges: [] },
+        { date: '2026-11-07', ranges: [{ start: '10:00', end: '11:00' }] },
+        // За окном записи: сохраняется, хотя слотов на эту дату ещё нет
+        { date: '2026-12-01', ranges: [] },
+      ],
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json().overrides).toContainEqual({
+      date: '2026-12-01',
+      ranges: [],
+    })
+    const starts = await slotStarts(app, eventTypeId)
+    expect(starts.filter((start) => start.startsWith('2026-11-04'))).toEqual([])
+    // По Москве 10:00 и 10:30
+    expect(starts.filter((start) => start.startsWith('2026-11-07'))).toEqual([
+      '2026-11-07T07:00:00Z',
+      '2026-11-07T07:30:00Z',
+    ])
+    expect(starts).toContain('2026-11-05T06:00:00Z')
+  })
+
   it('исключения отдаются по возрастанию даты', async () => {
     const app = buildTestApp()
 

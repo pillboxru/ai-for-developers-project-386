@@ -143,3 +143,16 @@ export function availabilityOn(
     ? override.ranges
     : cellsToRanges(draft.weekly[weekdayOf(dateKey)])
 }
+
+// Одни и те же часы на каждую из дат: прежние исключения на этих датах
+// заменяются. Порядок по дате, как у сервера
+export function withOverrides(
+  overrides: DateOverride[],
+  dates: string[],
+  ranges: TimeRange[],
+): DateOverride[] {
+  return [
+    ...overrides.filter((override) => !dates.includes(override.date)),
+    ...dates.map((date) => ({ date, ranges })),
+  ].sort((a, b) => a.date.localeCompare(b.date))
+}
