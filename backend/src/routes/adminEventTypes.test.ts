@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { CreateEventType } from '../generated/types.gen.js'
+import type { Booking, CreateEventType } from '../generated/types.gen.js'
 import { buildTestApp } from '../test/buildTestApp.js'
 
 const uuid =
@@ -521,7 +521,7 @@ describe('защита бронирований', () => {
 
   const listBookings = async (app: ReturnType<typeof buildTestApp>) =>
     (await app.inject({ method: 'GET', url: '/api/admin/bookings' })).json<
-      { id: string }[]
+      Booking[]
     >()
 
   const put = (
@@ -618,7 +618,7 @@ describe('защита бронирований', () => {
     expect(response.statusCode).toBe(200)
     const [listed] = await listBookings(app)
     expect(listed).toMatchObject({ id: booking.id, cancelled: true })
-    const { start, end } = listed as unknown as { start: string; end: string }
+    const { start, end } = listed
     expect(Date.parse(end) - Date.parse(start)).toBe(60 * 60_000)
   })
 
