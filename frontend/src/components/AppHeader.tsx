@@ -12,6 +12,9 @@ export function AppHeader() {
           <Button component={Link} to="/book" variant="subtle">
             Записаться
           </Button>
+          <Button component={Link} to="/admin" variant="subtle" color="gray">
+            Владельцу
+          </Button>
           <ColorSchemeToggle />
         </Group>
       </Group>

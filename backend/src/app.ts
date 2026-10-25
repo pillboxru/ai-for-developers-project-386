@@ -9,6 +9,7 @@ import ajvFormats from 'ajv-formats'
 import { apiErrorHandler, sendNotFound } from './errors.js'
 import { createEventTypeRepository } from './repositories/eventTypes.js'
 import { adminEventTypeHandlers } from './routes/adminEventTypes.js'
+import { eventTypeHandlers } from './routes/eventTypes.js'
 import { healthHandlers } from './routes/health.js'
 import { ownerHandlers } from './routes/owner.js'
 import { createEventTypeService } from './services/eventTypes.js'
@@ -101,6 +102,7 @@ export function buildApp({
     serviceHandlers: {
       ...healthHandlers,
       ...ownerHandlers({ name: ownerName, timeZone: ownerTimeZone }),
+      ...eventTypeHandlers(eventTypeService),
       ...adminEventTypeHandlers(eventTypeService),
     },
   })
