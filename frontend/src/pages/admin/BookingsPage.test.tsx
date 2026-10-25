@@ -155,6 +155,20 @@ describe('предстоящие бронирования владельца', (
       cards.map((card) => within(card).queryByText('Идёт сейчас') !== null),
     ).toEqual([true, true, false])
   })
+
+  it('отменённый идущий звонок не помечен «Идёт сейчас»', async () => {
+    serveBookings([
+      // 18:30–19:30 по Москве, сейчас 19:00
+      booking('2026-10-25T15:30:00Z', '2026-10-25T16:30:00Z', {
+        cancelled: true,
+      }),
+    ])
+    renderApp('/admin/bookings')
+
+    const card = within(await screen.findByRole('article'))
+    expect(card.getByText('Отменено')).toBeInTheDocument()
+    expect(card.queryByText('Идёт сейчас')).not.toBeInTheDocument()
+  })
 })
 
 describe('отмена бронирования', () => {

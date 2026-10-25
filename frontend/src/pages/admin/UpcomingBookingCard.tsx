@@ -25,8 +25,10 @@ export function UpcomingBookingCard({
   onCancel,
 }: UpcomingBookingCardProps) {
   // По часам браузера (27.1): сервер отдаёт идущий звонок в списке, но
-  // признака «идёт» в контракте нет
+  // признака «идёт» в контракте нет. Отменённый звонок не идёт, даже если
+  // его время ещё не кончилось
   const inProgress =
+    !booking.cancelled &&
     new Date(booking.start).getTime() <= now.getTime() &&
     now.getTime() < new Date(booking.end).getTime()
 
