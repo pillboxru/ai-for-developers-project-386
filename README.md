@@ -32,6 +32,8 @@ make dev      # бекенд на http://localhost:3000, фронтенд на h
 make check    # линтер, тесты и сборка
 ```
 
+Контракт API описан на TypeSpec в `contract/main.tsp`. `make generate` собирает из него OpenAPI и генерирует SDK фронтенда и типы бекенда. `make dev`, `make test` и `make build` запускают генерацию сами, сгенерированные файлы в git не хранятся.
+
 Запуск в Docker (приложение откроется на http://localhost:3000):
 
 ```bash

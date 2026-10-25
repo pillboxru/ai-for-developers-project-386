@@ -1,11 +1,7 @@
-export interface HealthStatus {
-  status: 'ok'
-}
+import { getHealth } from './generated/sdk.gen.ts'
+import type { Health } from './generated/types.gen.ts'
 
-export async function fetchHealth(): Promise<HealthStatus> {
-  const response = await fetch('/api/health')
-  if (!response.ok) {
-    throw new Error(`GET /api/health failed: ${response.status}`)
-  }
-  return response.json()
+export async function fetchHealth(): Promise<Health> {
+  const { data } = await getHealth()
+  return data
 }

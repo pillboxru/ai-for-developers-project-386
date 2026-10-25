@@ -9,6 +9,7 @@
 Запускай только через make:
 
 - `make setup` — установить зависимости
+- `make generate` — собрать OpenAPI из контракта и сгенерировать из него код; `dev`, `test`, `build` вызывают её сами
 - `make dev` — бекенд на :3000 и фронтенд на :5173 (Vite проксирует `/api` на бекенд)
 - `make test` — тесты (Vitest)
 - `make lint` / `make lint-fix` — oxlint и Prettier
@@ -17,7 +18,11 @@
 
 ## Структура
 
-- `contract/` — контракт API на TypeSpec (`main.tsp`), из него собирается OpenAPI 3.0 в `contract/dist/openapi.json`. Новый эндпоинт начинается с правки контракта (ADR 0005).
+- `contract/` — контракт API на TypeSpec (`main.tsp`). `make generate` собирает из него OpenAPI 3.0, а из OpenAPI hey-api (`contract/openapi-ts.config.ts`) генерирует код. Новый эндпоинт начинается с правки контракта (ADR 0005).
+- Генерируемые пути (не коммитятся, руками не правятся; контракт меняется только в `contract/main.tsp`, затем `make generate`):
+  - `contract/dist/openapi.json` — OpenAPI, по нему glue регистрирует маршруты;
+  - `backend/src/generated/` — типы моделей (`types.gen.ts`) и `RouteHandlers` (`fastify.gen.ts`);
+  - `frontend/src/api/generated/` — клиент fetch, типы, SDK (`sdk.gen.ts`) и опции TanStack Query (`@tanstack/react-query.gen.ts`).
 - `backend/` — Fastify + TypeScript. `src/app.ts` собирает приложение (`buildApp`), `src/server.ts` только запускает его.
 - `frontend/` — Vite + React + Mantine. Тесты рядом с кодом (`*.test.tsx`).
 - npm workspaces: зависимости ставь в свой пакет (`npm install <pkg> -w backend`).
@@ -25,14 +30,14 @@
 
 ## Архитектура
 
-- Backend: `routes/` (HTTP: валидация, вызов сервиса, ответ) → `services/` (бизнес-логика: слоты, бронирования) → `repositories/` (хранение данных). Маршруты не обращаются к хранилищу напрямую, только через сервисы.
-- Frontend: компоненты не вызывают `fetch`, запросы к API идут только через функции из `frontend/src/api/`.
+- Backend: `routes/` (обработчики операций контракта: вызов сервиса, ответ) → `services/` (бизнес-логика: слоты, бронирования) → `repositories/` (хранение данных). Маршруты не обращаются к хранилищу напрямую, только через сервисы. Маршруты и проверку запросов регистрирует `fastify-openapi-glue` по `operationId`, `app.get`/`app.post` для API не пишутся. Обработчик типизирован `RouteHandlers` и отвечает через `reply.code(n).send(...)`, ошибки — моделью `ApiError` (`backend/src/errors.ts`).
+- Frontend: компоненты не вызывают `fetch` и SDK напрямую, запросы к API идут только через функции из `frontend/src/api/` — тонкие обёртки над сгенерированным SDK. Клиент настроен один раз в `frontend/src/api/client.ts`.
 - В продакшене один контейнер: Fastify отдаёт API под `/api` и собранный фронтенд (`STATIC_DIR`). Все API-маршруты начинаются с `/api`.
 
 ## Образцы
 
-- Маршрут: `backend/src/routes/health.ts`, его тест через `app.inject()`: `backend/src/routes/health.test.ts`.
-- Запрос к API: `frontend/src/api/health.ts`.
+- Маршрут: обработчик `backend/src/routes/health.ts`, подключён в `serviceHandlers` в `backend/src/app.ts`; его тест через `app.inject()`: `backend/src/routes/health.test.ts`. Тесты ошибок API: `backend/src/errors.test.ts`.
+- Запрос к API: `frontend/src/api/health.ts` (обёртка над SDK), его тест: `frontend/src/api/health.test.ts`.
 - Тест компонента: `frontend/src/App.test.tsx` (обёртка `MantineProvider` и `MemoryRouter`; `fetch` подменяй через `vi.stubGlobal`).
 
 ## Как писать код

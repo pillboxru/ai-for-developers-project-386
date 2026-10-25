@@ -1,5 +1,7 @@
 dist
 coverage
+frontend/src/api/generated
+backend/src/generated
 package-lock.json
 CHANGELOG.md
 .release-please-manifest.json

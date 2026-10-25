@@ -10,7 +10,7 @@ COPY frontend/package.json frontend/
 RUN npm ci
 
 COPY . .
-RUN npm run build
+RUN npm run generate && npm run build
 
 # Этап 2: лёгкий образ только с тем, что нужно для запуска
 FROM node:24-alpine AS runtime
@@ -25,6 +25,8 @@ COPY frontend/package.json frontend/
 RUN npm ci --omit=dev --workspace backend && npm cache clean --force
 
 COPY --from=build /app/backend/dist backend/dist
+# Маршруты и проверку запросов glue строит из контракта при старте
+COPY --from=build /app/contract/dist/openapi.json contract/dist/openapi.json
 COPY --from=build /app/frontend/dist public
 
 USER node

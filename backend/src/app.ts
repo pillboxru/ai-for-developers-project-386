@@ -1,8 +1,17 @@
 import { existsSync } from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import Fastify from 'fastify'
 import fastifyStatic from '@fastify/static'
-import { healthRoutes } from './routes/health.js'
+import openapiGlue from 'fastify-openapi-glue'
+import { apiErrorHandler, sendNotFound } from './errors.js'
+import { healthHandlers } from './routes/health.js'
+
+// Собранный контракт лежит на том же расстоянии от src/ и от dist/, а в
+// Docker-образ копируется по тому же пути
+const specification = fileURLToPath(
+  new URL('../../contract/dist/openapi.json', import.meta.url),
+)
 
 export interface AppOptions {
   // Папка с собранным фронтендом. В продакшене бекенд раздаёт его сам.
@@ -11,9 +20,27 @@ export interface AppOptions {
 }
 
 export function buildApp({ staticDir, logger = false }: AppOptions = {}) {
-  const app = Fastify({ logger })
+  const app = Fastify({
+    logger,
+    ajv: {
+      // Лишнее поле должно давать 400, а не молча удаляться, и форма
+      // показывает ошибки всех полей сразу
+      customOptions: {
+        removeAdditional: false,
+        allErrors: true,
+        // TypeSpec выносит строковый скаляр в allOf, а maxLength оставляет
+        // рядом без type: схема верна, но Ajv засоряет лог предупреждениями
+        strictTypes: false,
+      },
+    },
+  })
 
-  app.register(healthRoutes, { prefix: '/api' })
+  app.setErrorHandler(apiErrorHandler)
+
+  app.register(openapiGlue, {
+    specification,
+    serviceHandlers: { ...healthHandlers },
+  })
 
   if (staticDir && existsSync(staticDir)) {
     app.register(fastifyStatic, { root: path.resolve(staticDir) })
@@ -23,8 +50,10 @@ export function buildApp({ staticDir, logger = false }: AppOptions = {}) {
       if (request.method === 'GET' && !request.url.startsWith('/api')) {
         return reply.sendFile('index.html')
       }
-      return reply.code(404).send({ error: 'Not Found' })
+      return sendNotFound(reply)
     })
+  } else {
+    app.setNotFoundHandler((_request, reply) => sendNotFound(reply))
   }
 
   return app

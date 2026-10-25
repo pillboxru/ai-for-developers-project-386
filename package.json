@@ -9,8 +9,9 @@
     "frontend"
   ],
   "scripts": {
+    "generate": "npm run generate -w contract",
     "dev": "concurrently -n backend,frontend -c blue,green \"npm run dev -w backend\" \"npm run dev -w frontend\"",
-    "build": "npm run build --workspaces",
+    "build": "npm run build --workspaces --if-present",
     "test": "npm test --workspaces --if-present",
     "lint": "oxlint && prettier --check .",
     "lint:fix": "oxlint --fix && prettier --write ."

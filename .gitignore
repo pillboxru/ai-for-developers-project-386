@@ -4,6 +4,10 @@ dist
 coverage
 *.tsbuildinfo
 
+# Генерируется из контракта (make generate)
+frontend/src/api/generated
+backend/src/generated
+
 # Environment
 .env
 .env.*
