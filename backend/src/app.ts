@@ -47,11 +47,27 @@ export interface AppOptions {
 // Проверяем при сборке, чтобы сервер с опечаткой в поясе не стартовал,
 // а не считал слоты неизвестно по каким часам
 function assertTimeZone(timeZone: string) {
+  let resolved: string
   try {
-    new Intl.DateTimeFormat('en-US', { timeZone })
+    resolved = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+    }).resolvedOptions().timeZone
   } catch {
     throw new Error(
       `Неизвестный часовой пояс владельца «${timeZone}»: нужно IANA-имя, например Europe/Moscow`,
+    )
+  }
+  // Intl принимает и смещение, но с ним слоты не переходят на летнее время
+  if (/^[+-]/.test(resolved)) {
+    throw new Error(
+      `Часовой пояс владельца «${timeZone}» — смещение, а не IANA-имя: смещение не знает перевода часов. Нужно IANA-имя, например Europe/Moscow`,
+    )
+  }
+  // Имя уходит гостю как есть, и фронтенд сравнивает его с поясом браузера
+  // строкой: «europe/moscow» не совпал бы с Europe/Moscow
+  if (resolved !== timeZone) {
+    throw new Error(
+      `Часовой пояс владельца «${timeZone}» записан не так, как в базе IANA: нужно «${resolved}»`,
     )
   }
 }
