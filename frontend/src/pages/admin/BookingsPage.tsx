@@ -1,13 +1,15 @@
 import { Container, Group, Stack, Text, Title } from '@mantine/core'
 import { IconCalendarEvent, IconWorld } from '@tabler/icons-react'
+import { useDisclosure } from '@mantine/hooks'
 import { useQuery } from '@tanstack/react-query'
-import { useId } from 'react'
+import { useId, useState } from 'react'
 import { bookingsQuery } from '../../api/bookings.ts'
 import type { Booking } from '../../api/generated/types.gen.ts'
 import { ownerQuery } from '../../api/owner.ts'
 import { PageEmptyState } from '../../components/PageEmptyState.tsx'
 import { QueryContent } from '../../components/QueryContent.tsx'
 import { bookingDays, type BookingDay } from './bookingDays.ts'
+import { CancelBookingModal } from './CancelBookingModal.tsx'
 import { UpcomingBookingCard } from './UpcomingBookingCard.tsx'
 
 export function BookingsPage() {
@@ -57,6 +59,15 @@ function UpcomingBookings({
   // Перезагрузка списка (например, после отмены) пересчитывает их
   const now = new Date(loadedAt)
 
+  const [cancelOpened, cancelModal] = useDisclosure(false)
+  // Остаётся заданным и после закрытия: модалка показывает бронирование,
+  // пока уходит с экрана
+  const [cancelling, setCancelling] = useState<Booking>()
+  const openCancel = (booking: Booking) => {
+    setCancelling(booking)
+    cancelModal.open()
+  }
+
   return (
     <Stack mt="lg" gap="xl">
       <Group gap={6}>
@@ -71,8 +82,17 @@ function UpcomingBookings({
           day={day}
           ownerTimeZone={ownerTimeZone}
           now={now}
+          onCancel={openCancel}
         />
       ))}
+      {cancelling && (
+        <CancelBookingModal
+          opened={cancelOpened}
+          onClose={cancelModal.close}
+          booking={cancelling}
+          ownerTimeZone={ownerTimeZone}
+        />
+      )}
     </Stack>
   )
 }
@@ -81,10 +101,12 @@ function DaySection({
   day,
   ownerTimeZone,
   now,
+  onCancel,
 }: {
   day: BookingDay
   ownerTimeZone: string
   now: Date
+  onCancel: (booking: Booking) => void
 }) {
   const headingId = useId()
 
@@ -99,6 +121,7 @@ function DaySection({
           booking={booking}
           ownerTimeZone={ownerTimeZone}
           now={now}
+          onCancel={onCancel}
         />
       ))}
     </Stack>
