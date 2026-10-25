@@ -76,6 +76,19 @@ describe('политика повторов QueryClient', () => {
     expect(requests.count).toBe(2)
   })
 
+  it('чтение повторяется один раз после 5xx без тела', async () => {
+    // Так отвечает прокси, когда сервер приложения недоступен
+    const requests = failFirstListRequest(
+      () => new HttpResponse(null, { status: 502 }),
+    )
+    renderWithAppClient('/admin/event-types')
+
+    expect(
+      await screen.findByRole('cell', { name: 'Консультация' }, retryTimeout),
+    ).toBeInTheDocument()
+    expect(requests.count).toBe(2)
+  })
+
   it('после двух сбоев подряд показывает ошибку загрузки', async () => {
     let requests = 0
     server.use(
@@ -98,6 +111,16 @@ describe('политика повторов QueryClient', () => {
         { code: 'not_found', message: 'Не найдено' },
         { status: 404 },
       ),
+    )
+    renderWithAppClient('/admin/event-types')
+
+    expect(await screen.findByText(loadErrorText)).toBeInTheDocument()
+    expect(requests.count).toBe(1)
+  })
+
+  it('на 4xx с телом не от нашего сервера чтение не повторяется', async () => {
+    const requests = failFirstListRequest(() =>
+      HttpResponse.html('<h1>404 Not Found</h1>', { status: 404 }),
     )
     renderWithAppClient('/admin/event-types')
 

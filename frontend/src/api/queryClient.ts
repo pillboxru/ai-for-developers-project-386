@@ -1,12 +1,30 @@
 import { QueryClient } from '@tanstack/react-query'
-import { isApiError } from './errors.ts'
+import { client } from './generated/client.gen.ts'
 
-// Повторять стоит сбой, который может пройти сам: сеть или ошибку сервера.
-// Статуса в брошенной ошибке нет, есть только тело: наш сервер на любой 5xx
-// отвечает internal_error, остальные коды ApiError — ответы 4xx. Ошибка без
-// тела ApiError — это сеть (TypeError из fetch) или ответ не от нашего сервера
+// Клиент бросает только тело ответа, а повтор решается по статусу: 404 с
+// телом не от нашего сервера повторять незачем, 502 без тела — стоит.
+// Статус запоминается за брошенной ошибкой; WeakMap не держит её в памяти
+const responseStatuses = new WeakMap<object, number>()
+
+client.interceptors.error.use((error, response) => {
+  // Ответа нет при сбое сети: fetch бросил TypeError
+  if (!response) {
+    return error
+  }
+  // Тело не в JSON клиент бросает строкой, а ключ WeakMap — только объект
+  const thrown =
+    typeof error === 'object' && error !== null ? error : new Error(`${error}`)
+  responseStatuses.set(thrown, response.status)
+  return thrown
+})
+
+// Повторять стоит сбой, который может пройти сам: сеть или ошибку сервера
 function isTransientError(error: unknown) {
-  return isApiError(error) ? error.code === 'internal_error' : true
+  const status =
+    typeof error === 'object' && error !== null
+      ? responseStatuses.get(error)
+      : undefined
+  return status === undefined || status >= 500
 }
 
 // Клиент приложения. Тесты берут его только для проверки этой политики,
