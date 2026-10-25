@@ -17,6 +17,7 @@
 
 ## Структура
 
+- `contract/` — контракт API на TypeSpec (`main.tsp`), из него собирается OpenAPI 3.0 в `contract/dist/openapi.json`. Новый эндпоинт начинается с правки контракта (ADR 0005).
 - `backend/` — Fastify + TypeScript. `src/app.ts` собирает приложение (`buildApp`), `src/server.ts` только запускает его.
 - `frontend/` — Vite + React + Mantine. Тесты рядом с кодом (`*.test.tsx`).
 - npm workspaces: зависимости ставь в свой пакет (`npm install <pkg> -w backend`).

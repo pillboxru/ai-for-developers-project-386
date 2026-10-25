@@ -4,17 +4,19 @@
   "private": true,
   "type": "module",
   "workspaces": [
+    "contract",
     "backend",
     "frontend"
   ],
   "scripts": {
     "dev": "concurrently -n backend,frontend -c blue,green \"npm run dev -w backend\" \"npm run dev -w frontend\"",
     "build": "npm run build --workspaces",
-    "test": "npm test --workspaces",
+    "test": "npm test --workspaces --if-present",
     "lint": "oxlint && prettier --check .",
     "lint:fix": "oxlint --fix && prettier --write ."
   },
   "devDependencies": {
+    "@typespec/prettier-plugin-typespec": "^1.17.0",
     "concurrently": "^10.0.6",
     "oxlint": "^1.89.0",
     "prettier": "^3.9.10"
