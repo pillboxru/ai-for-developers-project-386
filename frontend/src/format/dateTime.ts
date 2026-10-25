@@ -47,3 +47,13 @@ export function formatDateKey(dateKey: string) {
     month: 'long',
   }).format(new Date(`${dateKey}T12:00:00Z`))
 }
+
+// «пт, 24 октября, 10:00–10:30» по часам пояса: время выбранного слота
+// и забронированного звонка
+export function formatSlotTime(
+  slot: { start: string; end: string },
+  timeZone: string,
+) {
+  const date = formatDateKey(dateKeyIn(slot.start, timeZone))
+  return `${date}, ${formatTime(slot.start, timeZone)}–${formatTime(slot.end, timeZone)}`
+}

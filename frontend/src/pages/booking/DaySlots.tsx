@@ -22,7 +22,6 @@ interface DaySlotsProps {
   date: string
   slots: Slot[]
   guestTimeZone: string
-  selectedStart: string | null
   onSelect: (slot: Slot) => void
 }
 
@@ -30,7 +29,6 @@ function DayPart({
   label,
   slots,
   guestTimeZone,
-  selectedStart,
   onSelect,
 }: Omit<DaySlotsProps, 'date'> & { label: string }) {
   const labelId = useId()
@@ -40,19 +38,15 @@ function DayPart({
         {label}
       </Text>
       <SimpleGrid cols={2} spacing="xs">
-        {slots.map((slot) => {
-          const selected = slot.start === selectedStart
-          return (
-            <Button
-              key={slot.start}
-              variant={selected ? 'filled' : 'outline'}
-              aria-pressed={selected}
-              onClick={() => onSelect(slot)}
-            >
-              {formatTime(slot.start, guestTimeZone)}
-            </Button>
-          )
-        })}
+        {slots.map((slot) => (
+          <Button
+            key={slot.start}
+            variant="outline"
+            onClick={() => onSelect(slot)}
+          >
+            {formatTime(slot.start, guestTimeZone)}
+          </Button>
+        ))}
       </SimpleGrid>
     </Stack>
   )

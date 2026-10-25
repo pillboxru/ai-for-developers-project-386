@@ -1,5 +1,6 @@
 import { Container } from '@mantine/core'
 import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
 import { useParams } from 'react-router'
 import { isApiError } from '../api/errors.ts'
 import { eventTypeQuery } from '../api/eventTypes.ts'
@@ -8,10 +9,7 @@ import { slotsQuery } from '../api/slots.ts'
 import { EventTypeNotFound } from '../components/EventTypeNotFound.tsx'
 import { QueryContent } from '../components/QueryContent.tsx'
 import { browserTimeZone } from '../format/dateTime.ts'
-import { BookingCard } from './booking/BookingCard.tsx'
-import { EventTypeSummary } from './booking/EventTypeSummary.tsx'
-import { NoFreeTime } from './booking/NoFreeTime.tsx'
-import { SlotPicker } from './booking/SlotPicker.tsx'
+import { BookingFlow } from './booking/BookingFlow.tsx'
 
 // 404 — тип скрыт или удалён, 400 — в адресе не UUID. Для гостя это одна
 // и та же битая ссылка: повтор тут не поможет, нужен другой тип
@@ -33,10 +31,14 @@ export function EventTypePage() {
   const owner = useQuery(ownerQuery())
   const slots = useQuery(slotsQuery(eventTypeId))
   const guestTimeZone = browserTimeZone()
+  // Бронирование ответило 404: тип скрыли или удалили, пока гость
+  // заполнял форму. Исход тот же, что у прямой ссылки на такой тип
+  const [eventTypeGone, setEventTypeGone] = useState(false)
 
   return (
     <Container size="lg" py="xl">
-      {isMissingEventType(eventType.error) ||
+      {eventTypeGone ||
+      isMissingEventType(eventType.error) ||
       isMissingEventType(slots.error) ? (
         <EventTypeNotFound />
       ) : (
@@ -44,28 +46,13 @@ export function EventTypePage() {
           {(eventTypeData) => (
             <QueryContent query={owner}>
               {(ownerData) => (
-                <BookingCard
-                  aside={
-                    <EventTypeSummary
-                      owner={ownerData}
-                      eventType={eventTypeData}
-                      guestTimeZone={guestTimeZone}
-                    />
-                  }
-                >
-                  <QueryContent query={slots}>
-                    {(slotList) =>
-                      slotList.slots.length === 0 ? (
-                        <NoFreeTime />
-                      ) : (
-                        <SlotPicker
-                          slotList={slotList}
-                          guestTimeZone={guestTimeZone}
-                        />
-                      )
-                    }
-                  </QueryContent>
-                </BookingCard>
+                <BookingFlow
+                  eventType={eventTypeData}
+                  owner={ownerData}
+                  slots={slots}
+                  guestTimeZone={guestTimeZone}
+                  onEventTypeGone={() => setEventTypeGone(true)}
+                />
               )}
             </QueryContent>
           )}
