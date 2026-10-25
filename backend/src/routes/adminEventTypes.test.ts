@@ -372,11 +372,16 @@ describe('скрытие типа правкой', () => {
       method: 'GET',
       url: `/api/event-types/${id}`,
     })
+    const slots = await app.inject({
+      method: 'GET',
+      url: `/api/event-types/${id}/slots`,
+    })
     return {
       listed: list
         .json<{ id: string }[]>()
         .some((eventType) => eventType.id === id),
       pageStatus: page.statusCode,
+      slotsStatus: slots.statusCode,
     }
   }
 
@@ -389,6 +394,7 @@ describe('скрытие типа правкой', () => {
     expect(await guestView(app, id)).toEqual({
       listed: false,
       pageStatus: 404,
+      slotsStatus: 404,
     })
     const admin = await app.inject({
       method: 'GET',
@@ -408,6 +414,7 @@ describe('скрытие типа правкой', () => {
     expect(await guestView(app, id)).toEqual({
       listed: true,
       pageStatus: 200,
+      slotsStatus: 200,
     })
   })
 })
