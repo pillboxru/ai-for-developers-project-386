@@ -18,6 +18,9 @@ export interface EventTypeRepository {
   list(): EventTypeRecord[]
   get(id: string): EventTypeRecord | undefined
   insert(record: EventTypeRecord): void
+  // Заменяет запись с тем же id, место в порядке создания сохраняется
+  update(record: EventTypeRecord): void
+  delete(id: string): void
 }
 
 // Хранилище в памяти процесса (ADR 0001). Map обходится в порядке вставки,
@@ -30,6 +33,13 @@ export function createEventTypeRepository(): EventTypeRepository {
     get: (id) => records.get(id),
     insert: (record) => {
       records.set(record.id, record)
+    },
+    // set по существующему ключу не двигает его в порядке обхода Map
+    update: (record) => {
+      records.set(record.id, record)
+    },
+    delete: (id) => {
+      records.delete(id)
     },
   }
 }

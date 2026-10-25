@@ -3,12 +3,15 @@ import { HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 import {
   handleCreateEventType,
+  handleDeleteEventType,
   handleListAdminEventTypes,
+  handleUpdateEventType,
 } from '../../api/generated/msw.gen.ts'
 import type {
   ApiError,
   CreateEventType,
   EventType,
+  UpdateEventType,
 } from '../../api/generated/types.gen.ts'
 import { renderApp } from '../../test/renderApp.tsx'
 import { server } from '../../test/server.ts'
@@ -70,14 +73,17 @@ describe('типы событий владельца', () => {
       )
     expect(rows).toEqual([
       [],
-      ['Знакомство', '15 мин', '30 мин', ''],
-      ['Разбор', '1 ч 30 мин', '1 ч', 'Скрыт'],
+      ['Знакомство', '15 мин', '30 мин', '', 'ИзменитьУдалить'],
+      ['Разбор', '1 ч 30 мин', '1 ч', 'Скрыт', 'ИзменитьУдалить'],
     ])
     expect(
       within(table)
         .getAllByRole('columnheader')
         .map((cell) => cell.textContent),
-    ).toEqual(['Название', 'Длительность', 'Шаг', ''])
+    ).toEqual(['Название', 'Длительность', 'Шаг', '', ''])
+    const firstRow = within(within(table).getAllByRole('row')[1])
+    expect(firstRow.getByRole('button', { name: 'Изменить' })).toBeEnabled()
+    expect(firstRow.getByRole('button', { name: 'Удалить' })).toBeEnabled()
     expect(
       screen.getByRole('button', { name: 'Создать тип события' }),
     ).toBeInTheDocument()
@@ -291,5 +297,270 @@ describe('модалка создания типа события', () => {
         'Не больше 1000 символов',
       ),
     )
+  })
+})
+
+async function rowOf(title: string) {
+  const table = await screen.findByRole('table')
+  const row = within(table)
+    .getAllByRole('row')
+    .find((candidate) => within(candidate).queryByText(title))
+  if (!row) throw new Error(`Нет строки «${title}»`)
+  return within(row)
+}
+
+async function openEditModal(title: string) {
+  const row = await rowOf(title)
+  fireEvent.click(row.getByRole('button', { name: 'Изменить' }))
+  return within(
+    await screen.findByRole('dialog', { name: 'Изменить тип события' }),
+  )
+}
+
+describe('модалка правки типа события', () => {
+  it('открывается с данными типа из списка', async () => {
+    server.use(
+      handleListAdminEventTypes({
+        body: [
+          eventType({ title: 'Знакомство' }),
+          eventType({
+            title: 'Разбор',
+            description: 'Посмотрим код',
+            durationMinutes: 90,
+            slotStepMinutes: 60,
+            hidden: true,
+          }),
+        ],
+      }),
+    )
+    renderApp('/admin/event-types')
+
+    const modal = await openEditModal('Разбор')
+
+    expect(modal.getByRole('textbox', { name: 'Название' })).toHaveValue(
+      'Разбор',
+    )
+    expect(modal.getByRole('textbox', { name: 'Описание' })).toHaveValue(
+      'Посмотрим код',
+    )
+    expect(modal.getByRole('combobox', { name: 'Длительность' })).toHaveValue(
+      '1 ч 30 мин',
+    )
+    expect(modal.getByRole('combobox', { name: 'Шаг' })).toHaveValue('1 ч')
+    expect(
+      modal.getByRole('switch', { name: 'Показывать гостям' }),
+    ).not.toBeChecked()
+  })
+
+  it('сохраняет тип полной моделью, уведомляет и перезагружает список', async () => {
+    const stored = [
+      eventType({ title: 'Консультация', description: 'Обсудим задачу' }),
+    ]
+    const sent: { id: string; body: UpdateEventType }[] = []
+    server.use(
+      handleListAdminEventTypes(() => HttpResponse.json(stored)),
+      handleUpdateEventType(async ({ params, request }) => {
+        const body = await request.json()
+        const id = String(params.eventTypeId)
+        sent.push({ id, body })
+        const updated = eventType({ ...body, id })
+        stored[0] = updated
+        return HttpResponse.json(updated)
+      }),
+    )
+    renderApp('/admin/event-types')
+
+    const modal = await openEditModal('Консультация')
+    fireEvent.change(modal.getByRole('textbox', { name: 'Название' }), {
+      target: { value: ' Разбор кода ' },
+    })
+    fireEvent.change(modal.getByRole('textbox', { name: 'Описание' }), {
+      target: { value: '' },
+    })
+    fireEvent.click(modal.getByRole('combobox', { name: 'Шаг' }))
+    fireEvent.click(await screen.findByRole('option', { name: '15 мин' }))
+    fireEvent.click(modal.getByRole('switch', { name: 'Показывать гостям' }))
+    fireEvent.click(modal.getByRole('button', { name: 'Сохранить' }))
+
+    expect(await screen.findByText('Тип события сохранён')).toBeInTheDocument()
+    expect(sent).toEqual([
+      {
+        id: stored[0].id,
+        body: {
+          title: 'Разбор кода',
+          durationMinutes: 30,
+          slotStepMinutes: 15,
+          hidden: true,
+        },
+      },
+    ])
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: 'Изменить тип события' }),
+      ).not.toBeInTheDocument(),
+    )
+    const row = await rowOf('Разбор кода')
+    expect(row.getByText('Скрыт')).toBeInTheDocument()
+
+    const reopened = await openEditModal('Разбор кода')
+    expect(reopened.getByRole('textbox', { name: 'Название' })).toHaveValue(
+      'Разбор кода',
+    )
+    expect(reopened.getByRole('combobox', { name: 'Шаг' })).toHaveValue(
+      '15 мин',
+    )
+  })
+
+  it('занятое название показывает ошибку под полем, модалка остаётся', async () => {
+    server.use(
+      handleListAdminEventTypes({ body: [eventType({ title: 'Разбор' })] }),
+      handleUpdateEventType(() =>
+        HttpResponse.json<ApiError>(
+          {
+            code: 'event_type_title_taken',
+            message: 'Тип события с таким названием уже есть',
+            fieldErrors: [
+              {
+                field: 'title',
+                message: 'Тип события с таким названием уже есть',
+              },
+            ],
+          },
+          { status: 409 },
+        ),
+      ),
+    )
+    renderApp('/admin/event-types')
+
+    const modal = await openEditModal('Разбор')
+    const title = modal.getByRole('textbox', { name: 'Название' })
+    fireEvent.change(title, { target: { value: 'Консультация' } })
+    fireEvent.click(modal.getByRole('button', { name: 'Сохранить' }))
+
+    await waitFor(() =>
+      expect(title).toHaveAccessibleDescription(
+        'Тип события с таким названием уже есть',
+      ),
+    )
+    expect(
+      screen.getByRole('dialog', { name: 'Изменить тип события' }),
+    ).toBeInTheDocument()
+  })
+
+  it('после правки «Создать тип события» открывает пустую форму', async () => {
+    server.use(
+      handleListAdminEventTypes({ body: [eventType({ title: 'Разбор' })] }),
+    )
+    renderApp('/admin/event-types')
+
+    const editModal = await openEditModal('Разбор')
+    fireEvent.click(editModal.getByRole('button', { name: 'Отмена' }))
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: 'Изменить тип события' }),
+      ).not.toBeInTheDocument(),
+    )
+    const modal = await openCreateModal()
+
+    expect(modal.getByRole('textbox', { name: 'Название' })).toHaveValue('')
+    expect(
+      modal.getByRole('switch', { name: 'Показывать гостям' }),
+    ).toBeChecked()
+  })
+})
+
+async function openDeleteModal(title: string) {
+  const row = await rowOf(title)
+  fireEvent.click(row.getByRole('button', { name: 'Удалить' }))
+  return within(
+    await screen.findByRole('dialog', { name: 'Удалить тип события?' }),
+  )
+}
+
+describe('удаление типа события', () => {
+  it('сначала спрашивает подтверждение, «Отмена» ничего не удаляет', async () => {
+    let deletes = 0
+    server.use(
+      handleListAdminEventTypes({ body: [eventType({ title: 'Разбор' })] }),
+      handleDeleteEventType(() => {
+        deletes += 1
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+    renderApp('/admin/event-types')
+
+    const modal = await openDeleteModal('Разбор')
+    expect(modal.getByText(/«Разбор»/)).toBeInTheDocument()
+    fireEvent.click(modal.getByRole('button', { name: 'Отмена' }))
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: 'Удалить тип события?' }),
+      ).not.toBeInTheDocument(),
+    )
+    expect(deletes).toBe(0)
+    expect(await rowOf('Разбор')).toBeTruthy()
+  })
+
+  it('после подтверждения удаляет тип, уведомляет и перезагружает список', async () => {
+    const stored = [
+      eventType({ title: 'Знакомство' }),
+      eventType({ title: 'Разбор' }),
+    ]
+    const deleted: string[] = []
+    server.use(
+      handleListAdminEventTypes(() => HttpResponse.json(stored)),
+      handleDeleteEventType(({ params }) => {
+        const id = String(params.eventTypeId)
+        deleted.push(id)
+        stored.splice(
+          stored.findIndex((candidate) => candidate.id === id),
+          1,
+        )
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+    const removedId = stored[1].id
+    renderApp('/admin/event-types')
+
+    const modal = await openDeleteModal('Разбор')
+    fireEvent.click(modal.getByRole('button', { name: 'Удалить' }))
+
+    expect(await screen.findByText('Тип события удалён')).toBeInTheDocument()
+    expect(deleted).toEqual([removedId])
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole('table')).queryByText('Разбор'),
+      ).not.toBeInTheDocument(),
+    )
+    expect(
+      screen.queryByRole('dialog', { name: 'Удалить тип события?' }),
+    ).not.toBeInTheDocument()
+    expect(await rowOf('Знакомство')).toBeTruthy()
+  })
+
+  it('при сбое уведомляет, модалка остаётся', async () => {
+    server.use(
+      handleListAdminEventTypes({ body: [eventType({ title: 'Разбор' })] }),
+      handleDeleteEventType(() =>
+        HttpResponse.json<ApiError>(
+          { code: 'internal_error', message: 'Внутренняя ошибка сервера' },
+          { status: 500 },
+        ),
+      ),
+    )
+    renderApp('/admin/event-types')
+
+    const modal = await openDeleteModal('Разбор')
+    fireEvent.click(modal.getByRole('button', { name: 'Удалить' }))
+
+    expect(
+      await screen.findByText(
+        'Не удалось удалить тип события. Попробуйте ещё раз.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('dialog', { name: 'Удалить тип события?' }),
+    ).toBeInTheDocument()
   })
 })
