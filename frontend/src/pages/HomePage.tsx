@@ -51,7 +51,7 @@ interface Step {
 const steps: Step[] = [
   {
     title: 'Выберите тип события',
-    description: 'У каждого типа своё название, описание и длительность.',
+    description: 'У каждого типа своё название и длительность.',
   },
   {
     title: 'Выберите слот',
@@ -59,7 +59,7 @@ const steps: Step[] = [
   },
   {
     title: 'Оставьте имя и email',
-    description: 'Бронирование сразу появится у владельца.',
+    description: 'Владелец пришлёт ссылку на звонок на ваш email.',
   },
 ]
 
@@ -127,10 +127,11 @@ export function HomePage() {
       <Stack
         component="section"
         id="how-it-works"
+        aria-labelledby="how-it-works-title"
         gap="xl"
         mt={{ base: 64, sm: 96 }}
       >
-        <Title order={2} ta="center">
+        <Title order={2} ta="center" id="how-it-works-title">
           Как это работает
         </Title>
         <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="lg">

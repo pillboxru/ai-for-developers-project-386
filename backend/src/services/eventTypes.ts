@@ -1,5 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import type { CreateEventType, EventType } from '../generated/types.gen.js'
+import type {
+  CreateEventType,
+  EventType,
+  PublicEventType,
+} from '../generated/types.gen.js'
 import type {
   EventTypeRecord,
   EventTypeRepository,
@@ -17,6 +21,20 @@ export type CreateEventTypeResult =
 // пробелов сделало бы одинаковыми названия, которые владелец видит разными
 const titleKey = (title: string) => title.toLocaleLowerCase('ru')
 
+// Гостю уходят только поля PublicEventType: схема ответа закрыта, и шаг
+// слотов или признак скрытия в ответе были бы ошибкой контракта
+export const toPublicEventType = ({
+  id,
+  title,
+  description,
+  durationMinutes,
+}: EventTypeRecord): PublicEventType => ({
+  id,
+  title,
+  description,
+  durationMinutes,
+})
+
 export type EventTypeService = ReturnType<typeof createEventTypeService>
 
 export function createEventTypeService({ eventTypes }: EventTypeServiceDeps) {
@@ -31,10 +49,18 @@ export function createEventTypeService({ eventTypes }: EventTypeServiceDeps) {
     // Все типы, включая скрытые, в порядке создания
     listAll: (): EventType[] => eventTypes.list().map(toEventType),
 
-    // Скрытый тип для гостя не существует, как и тип с неизвестным id
-    findVisible: (id: string): EventType | undefined => {
+    // Видимые типы в порядке создания: то, из чего выбирает гость
+    listVisible: (): PublicEventType[] =>
+      eventTypes
+        .list()
+        .filter((record) => !record.hidden)
+        .map(toPublicEventType),
+
+    // Тип, на который гость может записаться. Скрытый для гостя не существует
+    // (4.1): его страница, слоты и бронирование на него отвечают 404
+    findVisible: (id: string): EventTypeRecord | undefined => {
       const record = eventTypes.get(id)
-      return record && !record.hidden ? toEventType(record) : undefined
+      return record && !record.hidden ? record : undefined
     },
 
     create: (input: CreateEventType): CreateEventTypeResult => {

@@ -10,6 +10,7 @@ import { apiErrorHandler, sendNotFound } from './errors.js'
 import { createEventTypeRepository } from './repositories/eventTypes.js'
 import { createScheduleRepository } from './repositories/schedule.js'
 import { adminEventTypeHandlers } from './routes/adminEventTypes.js'
+import { eventTypeHandlers } from './routes/eventTypes.js'
 import { healthHandlers } from './routes/health.js'
 import { ownerHandlers } from './routes/owner.js'
 import { slotHandlers } from './routes/slots.js'
@@ -110,6 +111,7 @@ export function buildApp({
     serviceHandlers: {
       ...healthHandlers,
       ...ownerHandlers({ name: ownerName, timeZone: ownerTimeZone }),
+      ...eventTypeHandlers(eventTypeService),
       ...adminEventTypeHandlers(eventTypeService),
       ...slotHandlers({ eventTypeService, slotService }),
     },
