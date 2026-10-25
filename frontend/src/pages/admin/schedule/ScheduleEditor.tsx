@@ -2,7 +2,7 @@ import { Alert, Button, Grid, Group, Modal, Text } from '@mantine/core'
 import { IconAlertTriangle } from '@tabler/icons-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { invalidateUpcomingBookings } from '../../../api/bookings.ts'
+import { invalidateBookings } from '../../../api/bookings.ts'
 import { isApiError } from '../../../api/errors.ts'
 import type { Booking, Schedule } from '../../../api/generated/types.gen.ts'
 import {
@@ -65,7 +65,7 @@ export function ScheduleEditor({
             error.bookings
           ) {
             setBlocked(error.bookings)
-            void invalidateUpcomingBookings(queryClient)
+            void invalidateBookings(queryClient)
             return
           }
           notifyActionError()

@@ -9,11 +9,12 @@ import {
 // которые вычисляет в момент запроса, иначе 409 slot_unavailable
 export const createBookingMutationOptions = () => createBookingMutation()
 
-// Предстоящие бронирования всех типов, включая отменённые, по началу
-export const upcomingBookingsQuery = () => listBookingsOptions()
+// Предстоящие бронирования владельца всех типов, включая скрытые
+// и отменённые, по началу. Дни раскладывает экран по поясу владельца
+export const bookingsQuery = () => listBookingsOptions()
 
 // Список мог устареть: сервер отказал из-за бронирования, которого ещё нет
 // на экране
-export function invalidateUpcomingBookings(queryClient: QueryClient) {
+export function invalidateBookings(queryClient: QueryClient) {
   return queryClient.invalidateQueries({ queryKey: listBookingsQueryKey() })
 }

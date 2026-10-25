@@ -246,25 +246,3 @@ describe('POST /api/event-types/:eventTypeId/bookings', () => {
     })
   })
 })
-
-describe('GET /api/admin/bookings', () => {
-  it('предстоящие бронирования всех типов по началу', async () => {
-    const app = buildTestApp()
-    const halfHour = await createEventTypeOf(app, 30)
-    const hour = await createEventTypeOf(app, 60)
-    const later = (
-      await book(app, halfHour, { start: '2026-11-04T07:00:00Z' })
-    ).json()
-    const earlier = (
-      await book(app, hour, { start: '2026-11-03T07:00:00Z' })
-    ).json()
-
-    const response = await app.inject({
-      method: 'GET',
-      url: '/api/admin/bookings',
-    })
-
-    expect(response.statusCode).toBe(200)
-    expect(response.json()).toEqual([earlier, later])
-  })
-})

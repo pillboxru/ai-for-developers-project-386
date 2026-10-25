@@ -14,7 +14,7 @@ import type { SlotService } from './slots.js'
 
 export interface BookingServiceDeps {
   bookings: BookingRepository
-  // Конец бронирования считается по длительности его типа (ADR 0002)
+  // Репозиторий, а не сервис типов: владельцу нужны и скрытые типы
   eventTypes: EventTypeRepository
   eventTypeService: EventTypeService
   slotService: SlotService
@@ -49,8 +49,8 @@ export function toBooking(
   }
 }
 
-// Все бронирования всех типов в порядке создания, с концом по типу
-export function listBookings(
+// Бронирования всех типов в порядке создания, с концом по длительности типа
+export function listAllBookings(
   bookings: BookingRepository,
   eventTypes: EventTypeRepository,
 ): Booking[] {
@@ -77,11 +77,13 @@ export function createBookingService({
   now,
 }: BookingServiceDeps) {
   return {
-    // Предстоящие — звонок ещё не закончился, в том числе идущий сейчас.
-    // Отменённые тоже: их видит владелец в списке бронирований
+    // Предстоящие: звонок ещё не закончился, идущий сейчас тоже здесь.
+    // Отменённые и бронирования скрытых типов остаются, владелец видит всё.
+    // Сортировка устойчивая: на одном начале отменённое стоит раньше
+    // созданного после него
     listUpcoming: (): Booking[] => {
       const current = Temporal.Instant.fromEpochMilliseconds(now().getTime())
-      return listBookings(bookings, eventTypes)
+      return listAllBookings(bookings, eventTypes)
         .filter(
           (booking) =>
             Temporal.Instant.compare(

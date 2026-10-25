@@ -14,7 +14,7 @@ import type {
   ScheduleRecord,
   ScheduleRepository,
 } from '../repositories/schedule.js'
-import { listBookings } from './bookings.js'
+import { listAllBookings } from './bookings.js'
 
 export interface SlotInput {
   eventType: Pick<EventType, 'durationMinutes' | 'slotStepMinutes'>
@@ -249,7 +249,7 @@ export function createSlotService({
         availability: schedule.get(),
         // Бронирования всех типов: неотменённые не пересекаются, даже если у
         // них разные типы событий
-        bookings: listBookings(bookings, eventTypes),
+        bookings: listAllBookings(bookings, eventTypes),
         now: now(),
         timeZone,
       }),
