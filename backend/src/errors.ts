@@ -11,7 +11,8 @@ export function sendNotFound(reply: FastifyReply) {
   return reply.code(404).send(body)
 }
 
-// Ошибки полей тела: от Ajv и от правил сервиса, которые схемой не выразить
+// Тем же ответом, что и ошибки Ajv, сервис сообщает о правилах, которые
+// схемой не выразить: фронтенд показывает их у полей, не зная, кто проверял
 export function sendValidationError(
   reply: FastifyReply,
   fieldErrors: FieldError[],

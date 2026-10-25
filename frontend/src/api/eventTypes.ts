@@ -10,10 +10,8 @@ import {
 import { createEventType, updateEventType } from './generated/sdk.gen.ts'
 import type { CreateEventType } from './generated/types.gen.ts'
 
-// Все типы событий владельца, включая скрытые, в порядке создания
 export const adminEventTypesQuery = () => listAdminEventTypesOptions()
 
-// Видимые гостю типы в порядке создания
 export const eventTypesQuery = () => listEventTypesOptions()
 
 // Тип, на который записывается гость. Скрытый отвечает 404, как несуществующий

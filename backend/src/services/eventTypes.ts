@@ -79,7 +79,7 @@ export function createEventTypeService({
   }
 
   return {
-    // Все типы, включая скрытые, в порядке создания
+    // Владелец видит и скрытые: иначе вернуть тип гостям было бы негде (24.2)
     listAll: (): EventType[] => eventTypes.list().map(toEventType),
 
     // Видимые типы в порядке создания: то, из чего выбирает гость
