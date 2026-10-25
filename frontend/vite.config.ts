@@ -6,9 +6,13 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [react()],
   server: {
-    // В разработке запросы к API уходят на бекенд
+    // Node разрешает localhost в ::1, и без явного адреса Vite слушает только
+    // IPv6, а браузер, открывший localhost по IPv4, получает отказ
+    host: '127.0.0.1',
+    // В разработке запросы к API уходят на бекенд. Адрес IPv4, а не
+    // localhost: бекенд слушает 0.0.0.0, на ::1 его нет
     proxy: {
-      '/api': 'http://localhost:3000',
+      '/api': 'http://127.0.0.1:3000',
     },
   },
   test: {
