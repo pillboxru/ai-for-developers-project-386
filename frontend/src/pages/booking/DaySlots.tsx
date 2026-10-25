@@ -59,7 +59,9 @@ export function DaySlots({ date, slots, ...partProps }: DaySlotsProps) {
       <Title order={2} size="h5">
         {formatDateKey(date)}
       </Title>
-      <ScrollArea.Autosize mah={380}>
+      {/* Полоса прокрутки рисуется поверх содержимого и закрывала правую
+          колонку слотов: отступ появляется только вместе с полосой */}
+      <ScrollArea.Autosize mah={380} offsetScrollbars="present">
         <Stack gap="md">
           {dayParts.map(({ label, from, to }) => {
             const partSlots = slots.filter((slot) => {
