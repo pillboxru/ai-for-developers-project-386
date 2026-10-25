@@ -1,8 +1,15 @@
 import '@testing-library/jest-dom/vitest'
 import { notifications } from '@mantine/notifications'
-import { cleanup } from '@testing-library/react'
+import { cleanup, configure } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll, expect } from 'vitest'
 import { server } from './test/server.ts'
+
+// Первый тест файла платит за холодный старт: первый рендер Mantine и первый
+// запрос через MSW в свежем воркере в несколько раз медленнее следующих, а
+// при параллельном прогоне под нагрузкой не укладываются в 1 с по умолчанию.
+// findBy ждёт только до появления элемента, поэтому запас зелёные тесты
+// не замедляет
+configure({ asyncUtilTimeout: 3000 })
 
 // Стратегия 'error' в MSW 3 только пишет в консоль и отклоняет запрос:
 // компонент показывает ошибку загрузки, и тест, который её не проверяет,
