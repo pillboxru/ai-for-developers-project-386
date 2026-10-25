@@ -1,10 +1,12 @@
-import { screen, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { HttpResponse } from 'msw'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  handleCancelBooking,
   handleGetOwner,
   handleListBookings,
 } from '../../api/generated/msw.gen.ts'
-import type { Booking } from '../../api/generated/types.gen.ts'
+import type { ApiError, Booking } from '../../api/generated/types.gen.ts'
 import { renderApp } from '../../test/renderApp.tsx'
 import { server } from '../../test/server.ts'
 
@@ -152,5 +154,211 @@ describe('предстоящие бронирования владельца', (
     expect(
       cards.map((card) => within(card).queryByText('Идёт сейчас') !== null),
     ).toEqual([true, true, false])
+  })
+})
+
+describe('отмена бронирования', () => {
+  const dialogName = 'Отменить бронирование?'
+
+  async function openCancelModal() {
+    const card = within(await screen.findByRole('article'))
+    fireEvent.click(card.getByRole('button', { name: 'Отменить' }))
+    return within(await screen.findByRole('dialog', { name: dialogName }))
+  }
+
+  it('подтверждение показывает тип, время и гостя; «Не отменять» закрывает без отмены', async () => {
+    let cancels = 0
+    serveBookings([
+      booking('2026-10-26T07:00:00Z', '2026-10-26T07:30:00Z', {
+        name: 'Мария Иванова',
+      }),
+    ])
+    server.use(
+      handleCancelBooking(() => {
+        cancels += 1
+        return HttpResponse.json<Booking>(
+          booking('2026-10-26T07:00:00Z', '2026-10-26T07:30:00Z'),
+        )
+      }),
+    )
+    renderApp('/admin/bookings')
+
+    const modal = await openCancelModal()
+    expect(modal.getByText(/Консультация/)).toBeInTheDocument()
+    expect(modal.getByText(/пн, 26 октября, 10:00–10:30/)).toBeInTheDocument()
+    expect(modal.getByText(/Мария Иванова/)).toBeInTheDocument()
+    // Красная: так Mantine задаёт цвет кнопки
+    expect(
+      modal
+        .getByRole('button', { name: 'Отменить бронирование' })
+        .style.getPropertyValue('--button-bg'),
+    ).toBe('var(--mantine-color-red-filled)')
+    fireEvent.click(modal.getByRole('button', { name: 'Не отменять' }))
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: dialogName }),
+      ).not.toBeInTheDocument(),
+    )
+    expect(cancels).toBe(0)
+  })
+
+  it('после подтверждения отменяет, уведомляет и показывает карточку отменённой', async () => {
+    const stored = [
+      booking('2026-10-26T07:00:00Z', '2026-10-26T07:30:00Z', {
+        name: 'Мария Иванова',
+        email: 'maria@example.com',
+      }),
+    ]
+    const cancelled: string[] = []
+    server.use(
+      handleGetOwner({
+        body: { name: 'Анна Смирнова', timeZone: 'Europe/Moscow' },
+      }),
+      handleListBookings(() => HttpResponse.json(stored)),
+      handleCancelBooking(({ params }) => {
+        cancelled.push(String(params.bookingId))
+        stored[0] = { ...stored[0], cancelled: true }
+        return HttpResponse.json(stored[0])
+      }),
+    )
+    renderApp('/admin/bookings')
+
+    const modal = await openCancelModal()
+    fireEvent.click(
+      modal.getByRole('button', { name: 'Отменить бронирование' }),
+    )
+
+    expect(await screen.findByText('Бронирование отменено')).toBeInTheDocument()
+    expect(cancelled).toEqual([stored[0].id])
+    const card = within(screen.getByRole('article'))
+    expect(await card.findByText('Отменено')).toBeInTheDocument()
+    expect(
+      card.queryByRole('button', { name: 'Отменить' }),
+    ).not.toBeInTheDocument()
+    expect(
+      card.getByRole('link', { name: 'maria@example.com' }),
+    ).toHaveAttribute('href', 'mailto:maria@example.com')
+    expect(screen.getByRole('article')).toHaveStyle({ opacity: '0.6' })
+    expect(
+      screen.queryByRole('dialog', { name: dialogName }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('новое бронирование на то же время стоит рядом с отменённым', async () => {
+    serveBookings([
+      booking('2026-10-26T07:00:00Z', '2026-10-26T07:30:00Z', {
+        name: 'Мария Иванова',
+        cancelled: true,
+      }),
+      booking('2026-10-26T07:00:00Z', '2026-10-26T07:30:00Z', {
+        name: 'Пётр Сидоров',
+      }),
+    ])
+    renderApp('/admin/bookings')
+
+    await screen.findByRole('region', { name: 'Завтра' })
+    expect(groups()).toEqual([
+      { day: 'Завтра', times: ['10:00–10:30', '10:00–10:30'] },
+    ])
+    const [cancelledCard, newCard] = screen
+      .getAllByRole('article')
+      .map((card) => within(card))
+    expect(cancelledCard.getByText('Мария Иванова')).toBeInTheDocument()
+    expect(cancelledCard.getByText('Отменено')).toBeInTheDocument()
+    expect(newCard.getByText('Пётр Сидоров')).toBeInTheDocument()
+    expect(newCard.queryByText('Отменено')).not.toBeInTheDocument()
+    expect(
+      newCard.getByRole('button', { name: 'Отменить' }),
+    ).toBeInTheDocument()
+  })
+
+  it('только отменённые — не пустой список, а их карточки', async () => {
+    serveBookings([
+      booking('2026-10-26T07:00:00Z', '2026-10-26T07:30:00Z', {
+        cancelled: true,
+      }),
+    ])
+    renderApp('/admin/bookings')
+
+    expect(
+      within(await screen.findByRole('article')).getByText('Отменено'),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText('Предстоящих бронирований нет'),
+    ).not.toBeInTheDocument()
+  })
+
+  describe.each([
+    {
+      status: 409,
+      error: {
+        code: 'booking_ended',
+        message: 'Бронирование уже закончилось',
+      } satisfies ApiError,
+      notification: 'Бронирование уже закончилось',
+    },
+    {
+      status: 404,
+      error: { code: 'not_found', message: 'Не найдено' } satisfies ApiError,
+      notification: 'Бронирование не найдено',
+    },
+  ])('$status $error.code', ({ status, error, notification }) => {
+    it('уведомляет, закрывает модалку и перезагружает список', async () => {
+      // Пока модалка была открыта, звонок закончился или бронирование
+      // пропало: в новом списке его уже нет
+      let stored = [booking('2026-10-26T07:00:00Z', '2026-10-26T07:30:00Z')]
+      server.use(
+        handleGetOwner({
+          body: { name: 'Анна Смирнова', timeZone: 'Europe/Moscow' },
+        }),
+        handleListBookings(() => HttpResponse.json(stored)),
+        handleCancelBooking(() => {
+          stored = []
+          return HttpResponse.json<ApiError>(error, { status })
+        }),
+      )
+      renderApp('/admin/bookings')
+
+      const modal = await openCancelModal()
+      fireEvent.click(
+        modal.getByRole('button', { name: 'Отменить бронирование' }),
+      )
+
+      expect(await screen.findByText(notification)).toBeInTheDocument()
+      expect(
+        await screen.findByRole('heading', {
+          name: 'Предстоящих бронирований нет',
+        }),
+      ).toBeInTheDocument()
+      expect(
+        screen.queryByRole('dialog', { name: dialogName }),
+      ).not.toBeInTheDocument()
+    })
+  })
+
+  it('при прочем сбое уведомляет, модалка остаётся', async () => {
+    serveBookings([booking('2026-10-26T07:00:00Z', '2026-10-26T07:30:00Z')])
+    server.use(
+      handleCancelBooking(() =>
+        HttpResponse.json<ApiError>(
+          { code: 'internal_error', message: 'Внутренняя ошибка сервера' },
+          { status: 500 },
+        ),
+      ),
+    )
+    renderApp('/admin/bookings')
+
+    const modal = await openCancelModal()
+    fireEvent.click(
+      modal.getByRole('button', { name: 'Отменить бронирование' }),
+    )
+
+    expect(
+      await screen.findByText(
+        'Не удалось отменить бронирование. Попробуйте ещё раз.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: dialogName })).toBeInTheDocument()
   })
 })
