@@ -34,6 +34,15 @@ describe('app', () => {
     )
   })
 
+  // ICU разворачивает ссылки и новые имена в свои (Europe/Kyiv → Europe/Kiev),
+  // но для IANA это то же место с теми же часами
+  it.each(['Europe/Kyiv', 'Etc/UTC', 'US/Eastern'])(
+    'собирается с IANA-именем %s, которое ICU пишет иначе',
+    (ownerTimeZone) => {
+      expect(() => buildTestApp({ ownerTimeZone })).not.toThrow()
+    },
+  )
+
   it('не собирается с именем пояса в другом регистре', () => {
     expect(() => buildTestApp({ ownerTimeZone: 'europe/moscow' })).toThrow(
       'Часовой пояс владельца «europe/moscow» записан не так, как в базе IANA: нужно «Europe/Moscow»',

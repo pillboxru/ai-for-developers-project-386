@@ -64,8 +64,13 @@ function assertTimeZone(timeZone: string) {
     )
   }
   // Имя уходит гостю как есть, и фронтенд сравнивает его с поясом браузера
-  // строкой: «europe/moscow» не совпал бы с Europe/Moscow
-  if (resolved !== timeZone) {
+  // строкой: «europe/moscow» не совпал бы с Europe/Moscow. Отличие только
+  // в регистре: ссылки и новые имена IANA ICU пишет по-своему (Europe/Kyiv
+  // → Europe/Kiev, Etc/UTC → UTC), и они верные
+  if (
+    resolved !== timeZone &&
+    resolved.toLowerCase() === timeZone.toLowerCase()
+  ) {
     throw new Error(
       `Часовой пояс владельца «${timeZone}» записан не так, как в базе IANA: нужно «${resolved}»`,
     )
