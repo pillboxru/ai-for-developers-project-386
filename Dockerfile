@@ -3,6 +3,8 @@ FROM node:24-alpine AS build
 WORKDIR /app
 
 COPY package.json package-lock.json ./
+# Без package.json workspace npm ci молча не ставит его зависимости
+COPY contract/package.json contract/
 COPY backend/package.json backend/
 COPY frontend/package.json frontend/
 RUN npm ci
