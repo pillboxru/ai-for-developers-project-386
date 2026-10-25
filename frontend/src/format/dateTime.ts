@@ -52,15 +52,21 @@ export function formatTime(instant: string, timeZone: string) {
   }).format(new Date(instant))
 }
 
-// «пт, 24 октября» для даты 'YYYY-MM-DD'. Полдень UTC и пояс UTC: дата
-// не сдвигается ни в каком поясе
+// Дата 'YYYY-MM-DD' как момент в полдень UTC. Читать её только UTC-методами
+// Date или Intl с поясом UTC: тогда дата не сдвигается ни в каком поясе
+// процесса, а прибавление суток не задевает переходов на летнее время
+export function noonUtcOf(dateKey: string) {
+  return new Date(`${dateKey}T12:00:00Z`)
+}
+
+// «пт, 24 октября» для даты 'YYYY-MM-DD'
 export function formatDateKey(dateKey: string) {
   return new Intl.DateTimeFormat('ru-RU', {
     timeZone: 'UTC',
     weekday: 'short',
     day: 'numeric',
     month: 'long',
-  }).format(new Date(`${dateKey}T12:00:00Z`))
+  }).format(noonUtcOf(dateKey))
 }
 
 // «пт, 24 октября, 10:00–10:30» по часам пояса: время выбранного слота

@@ -6,6 +6,7 @@ import type {
   UpdateSchedule,
   WeeklySchedule,
 } from '../../../api/generated/types.gen.ts'
+import { noonUtcOf } from '../../../format/dateTime.ts'
 
 // Матрица редактора: получасы суток по часам владельца
 export const cellMinutes = 30
@@ -125,10 +126,9 @@ export function sameDraft(a: ScheduleDraft, b: ScheduleDraft) {
   )
 }
 
-// День недели даты 'YYYY-MM-DD', 0 — понедельник. Полдень UTC: дата не
-// сдвигается
+// День недели даты 'YYYY-MM-DD', 0 — понедельник
 export function weekdayOf(dateKey: string) {
-  return (new Date(`${dateKey}T12:00:00Z`).getUTCDay() + 6) % 7
+  return (noonUtcOf(dateKey).getUTCDay() + 6) % 7
 }
 
 // Доступное время на дату: исключение заменяет расписание целиком

@@ -1,5 +1,5 @@
 import type { Booking } from '../../api/generated/types.gen.ts'
-import { dateKeyIn, formatDateKey } from '../../format/dateTime.ts'
+import { dateKeyIn, formatDateKey, noonUtcOf } from '../../format/dateTime.ts'
 
 export interface BookingDay {
   // 'YYYY-MM-DD' по часам владельца
@@ -9,10 +9,9 @@ export interface BookingDay {
   bookings: Booking[]
 }
 
-// Следующая дата календаря. Полдень UTC: прибавление суток не задевает
-// переходы на летнее время ни в каком поясе
+// Следующая дата календаря
 function nextDateKey(dateKey: string) {
-  const date = new Date(`${dateKey}T12:00:00Z`)
+  const date = noonUtcOf(dateKey)
   date.setUTCDate(date.getUTCDate() + 1)
   return date.toISOString().slice(0, 10)
 }
