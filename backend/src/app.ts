@@ -7,13 +7,16 @@ import openapiGlue from 'fastify-openapi-glue'
 import responseValidation from '@fastify/response-validation'
 import ajvFormats from 'ajv-formats'
 import { apiErrorHandler, sendNotFound } from './errors.js'
+import { createBookingRepository } from './repositories/bookings.js'
 import { createEventTypeRepository } from './repositories/eventTypes.js'
 import { createScheduleRepository } from './repositories/schedule.js'
 import { adminEventTypeHandlers } from './routes/adminEventTypes.js'
+import { bookingHandlers } from './routes/bookings.js'
 import { eventTypeHandlers } from './routes/eventTypes.js'
 import { healthHandlers } from './routes/health.js'
 import { ownerHandlers } from './routes/owner.js'
 import { slotHandlers } from './routes/slots.js'
+import { createBookingService } from './services/bookings.js'
 import { createEventTypeService } from './services/eventTypes.js'
 import { createSlotService } from './services/slots.js'
 
@@ -61,13 +64,20 @@ export function buildApp({
   assertTimeZone(ownerTimeZone)
 
   // Хранилище своё у каждого приложения: тесты не делят данные
-  const eventTypeService = createEventTypeService({
-    eventTypes: createEventTypeRepository(),
-  })
+  const eventTypes = createEventTypeRepository()
+  const bookings = createBookingRepository()
+  const eventTypeService = createEventTypeService({ eventTypes })
   const slotService = createSlotService({
     schedule: createScheduleRepository(),
+    bookings,
+    eventTypes,
     now,
     timeZone: ownerTimeZone,
+  })
+  const bookingService = createBookingService({
+    bookings,
+    eventTypeService,
+    slotService,
   })
 
   const app = Fastify({
@@ -114,6 +124,7 @@ export function buildApp({
       ...eventTypeHandlers(eventTypeService),
       ...adminEventTypeHandlers(eventTypeService),
       ...slotHandlers({ eventTypeService, slotService }),
+      ...bookingHandlers(bookingService),
     },
   })
 

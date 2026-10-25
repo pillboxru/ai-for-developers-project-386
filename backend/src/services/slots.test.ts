@@ -1,6 +1,8 @@
 import { Temporal } from 'temporal-polyfill'
 import { describe, expect, it } from 'vitest'
 import type { Slot, WeeklySchedule } from '../generated/types.gen.js'
+import { createBookingRepository } from '../repositories/bookings.js'
+import { createEventTypeRepository } from '../repositories/eventTypes.js'
 import { createScheduleRepository } from '../repositories/schedule.js'
 import { computeSlots, createSlotService, type SlotInput } from './slots.js'
 
@@ -438,6 +440,8 @@ describe('расписание по умолчанию', () => {
   it('пока владелец не менял расписание, доступно пн–пт 9:00–18:00 по его поясу', () => {
     const slotService = createSlotService({
       schedule: createScheduleRepository(),
+      bookings: createBookingRepository(),
+      eventTypes: createEventTypeRepository(),
       // Понедельник 2 ноября, 00:00 по Екатеринбургу (UTC+5)
       now: () => new Date('2026-11-01T19:00:00Z'),
       timeZone: 'Asia/Yekaterinburg',

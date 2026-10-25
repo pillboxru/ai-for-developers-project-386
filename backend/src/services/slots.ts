@@ -7,10 +7,13 @@ import type {
   TimeOfDay,
   WeeklySchedule,
 } from '../generated/types.gen.js'
+import type { BookingRepository } from '../repositories/bookings.js'
+import type { EventTypeRepository } from '../repositories/eventTypes.js'
 import type {
   ScheduleRecord,
   ScheduleRepository,
 } from '../repositories/schedule.js'
+import { toBooking } from './bookings.js'
 
 export interface SlotInput {
   eventType: Pick<EventType, 'durationMinutes' | 'slotStepMinutes'>
@@ -182,6 +185,9 @@ export function computeSlots({
 
 export interface SlotServiceDeps {
   schedule: ScheduleRepository
+  bookings: BookingRepository
+  // Конец бронирования считается по длительности его типа (ADR 0002)
+  eventTypes: EventTypeRepository
   now: () => Date
   timeZone: string
 }
@@ -190,17 +196,32 @@ export type SlotService = ReturnType<typeof createSlotService>
 
 export function createSlotService({
   schedule,
+  bookings,
+  eventTypes,
   now,
   timeZone,
 }: SlotServiceDeps) {
+  // Бронирования всех типов: неотменённые не пересекаются, даже если у них
+  // разные типы событий
+  const allBookings = () =>
+    bookings.list().map((record) => {
+      const eventType = eventTypes.get(record.eventTypeId)
+      // Тип с бронированиями не удаляется: без него конец бронирования не из
+      // чего вычислить (ADR 0002)
+      if (!eventType) {
+        throw new Error(
+          `Бронирование ${record.id} ссылается на несуществующий тип события ${record.eventTypeId}`,
+        )
+      }
+      return toBooking(record, eventType)
+    })
+
   return {
     listSlots: (eventType: SlotInput['eventType']): SlotList =>
       computeSlots({
         eventType,
         availability: schedule.get(),
-        // Хранилища бронирований ещё нет: оно появится вместе с созданием
-        // бронирования
-        bookings: [],
+        bookings: allBookings(),
         now: now(),
         timeZone,
       }),
