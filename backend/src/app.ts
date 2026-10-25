@@ -7,8 +7,11 @@ import openapiGlue from 'fastify-openapi-glue'
 import responseValidation from '@fastify/response-validation'
 import ajvFormats from 'ajv-formats'
 import { apiErrorHandler, sendNotFound } from './errors.js'
+import { createEventTypeRepository } from './repositories/eventTypes.js'
+import { adminEventTypeHandlers } from './routes/adminEventTypes.js'
 import { healthHandlers } from './routes/health.js'
 import { ownerHandlers } from './routes/owner.js'
+import { createEventTypeService } from './services/eventTypes.js'
 
 // Собранный контракт лежит на том же расстоянии от src/ и от dist/, а в
 // Docker-образ копируется по тому же пути
@@ -52,6 +55,11 @@ export function buildApp({
 }: AppOptions) {
   assertTimeZone(ownerTimeZone)
 
+  // Хранилище своё у каждого приложения: тесты не делят данные
+  const eventTypeService = createEventTypeService({
+    eventTypes: createEventTypeRepository(),
+  })
+
   const app = Fastify({
     logger,
     ajv: {
@@ -93,6 +101,7 @@ export function buildApp({
     serviceHandlers: {
       ...healthHandlers,
       ...ownerHandlers({ name: ownerName, timeZone: ownerTimeZone }),
+      ...adminEventTypeHandlers(eventTypeService),
     },
   })
 
