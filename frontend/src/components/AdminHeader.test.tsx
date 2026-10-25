@@ -1,6 +1,41 @@
 import { fireEvent, screen, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
+import {
+  handleGetOwner,
+  handleGetSchedule,
+  handleListBookings,
+} from '../api/generated/msw.gen.ts'
 import { renderApp } from '../test/renderApp.tsx'
+import { server } from '../test/server.ts'
+
+// Разделы «Бронирования» и «Расписание» сразу загружают свои данные;
+// шапке они не важны, поэтому пустые
+beforeEach(() => {
+  server.use(
+    handleGetOwner({
+      body: { name: 'Анна Смирнова', timeZone: 'Europe/Moscow' },
+    }),
+    handleListBookings({ body: [] }),
+    handleGetSchedule({
+      body: {
+        weekly: {
+          monday: [],
+          tuesday: [],
+          wednesday: [],
+          thursday: [],
+          friday: [],
+          saturday: [],
+          sunday: [],
+        },
+        overrides: [],
+        bookingWindow: {
+          start: '2026-11-01T21:00:00Z',
+          end: '2026-11-15T21:00:00Z',
+        },
+      },
+    }),
+  )
+})
 
 describe('шапка владельца', () => {
   it('/admin перенаправляет на бронирования', async () => {

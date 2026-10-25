@@ -1,11 +1,24 @@
 import '@testing-library/jest-dom/vitest'
 import { notifications } from '@mantine/notifications'
 import { cleanup } from '@testing-library/react'
-import { afterAll, afterEach, beforeAll } from 'vitest'
+import { afterAll, afterEach, beforeAll, expect } from 'vitest'
 import { server } from './test/server.ts'
 
-// Запрос без хендлера валит тест: иначе он молча уйдёт в сеть или повиснет
-beforeAll(() => server.listen({ onUnhandledFrame: 'error' }))
+// Стратегия 'error' в MSW 3 только пишет в консоль и отклоняет запрос:
+// компонент показывает ошибку загрузки, и тест, который её не проверяет,
+// проходит. Поэтому запросы без хендлера копятся и валят тест в afterEach
+const unhandledRequests: string[] = []
+
+beforeAll(() =>
+  server.listen({
+    onUnhandledFrame: async ({ frame }) => {
+      const message = await frame.getUnhandledMessage()
+      unhandledRequests.push(message)
+      // Если колбэк не бросит, MSW пропустит запрос в настоящую сеть
+      throw new Error(message)
+    },
+  }),
+)
 
 afterEach(() => {
   cleanup()
@@ -13,6 +26,9 @@ afterEach(() => {
   // Хранилище уведомлений общее на модуль: без очистки уведомление одного
   // теста всплывёт в следующем
   notifications.clean()
+  // expect в afterEach относится к тесту, который только что прошёл
+  // oxlint-disable-next-line vitest/no-standalone-expect
+  expect(unhandledRequests.splice(0)).toEqual([])
 })
 
 afterAll(() => server.close())

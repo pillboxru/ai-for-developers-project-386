@@ -3,7 +3,10 @@ import { HttpResponse } from 'msw'
 import { describe, expect, it, vi } from 'vitest'
 import {
   handleCreateEventType,
+  handleGetOwner,
+  handleGetSchedule,
   handleListAdminEventTypes,
+  handleListBookings,
 } from '../api/generated/msw.gen.ts'
 import type { ApiError, EventType } from '../api/generated/types.gen.ts'
 import { renderApp } from '../test/renderApp.tsx'
@@ -127,7 +130,32 @@ describe('общие состояния экранов', () => {
     // Ответ не по контракту: страница падает при рендере списка. React
     // пишет пойманную ошибку в консоль, в выводе тестов она не нужна
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    server.use(handleListAdminEventTypes(() => HttpResponse.json({})))
+    server.use(
+      handleListAdminEventTypes(() => HttpResponse.json({})),
+      // Данные раздела «Расписание», куда тест переходит после сбоя
+      handleGetOwner({
+        body: { name: 'Анна Смирнова', timeZone: 'Europe/Moscow' },
+      }),
+      handleListBookings({ body: [] }),
+      handleGetSchedule({
+        body: {
+          weekly: {
+            monday: [],
+            tuesday: [],
+            wednesday: [],
+            thursday: [],
+            friday: [],
+            saturday: [],
+            sunday: [],
+          },
+          overrides: [],
+          bookingWindow: {
+            start: '2026-11-01T21:00:00Z',
+            end: '2026-11-15T21:00:00Z',
+          },
+        },
+      }),
+    )
     renderApp('/admin/event-types')
 
     expect(
