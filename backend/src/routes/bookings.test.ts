@@ -150,6 +150,24 @@ describe('POST /api/event-types/:eventTypeId/bookings', () => {
     expect(response.json().fieldErrors).toHaveLength(3)
   })
 
+  it.each([
+    ['id', { id: '7b0c4c3e-8a43-4d5e-9d6a-2f1e0a7f0c11' }],
+    ['end', { end: '2026-11-03T07:30:00Z' }],
+    ['cancelled', { cancelled: false }],
+  ])('присланное поле %s даёт 400 «Неизвестное поле»', async (field, extra) => {
+    const app = buildTestApp()
+    const eventTypeId = await createEventType(app)
+
+    const response = await book(app, eventTypeId, extra)
+
+    expect(response.statusCode).toBe(400)
+    expect(response.json()).toEqual({
+      code: 'validation_error',
+      message: expect.any(String),
+      fieldErrors: [{ field, message: 'Неизвестное поле' }],
+    })
+  })
+
   it('длиннее лимитов: 400 с сообщением о длине', async () => {
     const app = buildTestApp()
     const eventTypeId = await createEventType(app)
