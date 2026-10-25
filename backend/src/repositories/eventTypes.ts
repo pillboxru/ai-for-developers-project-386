@@ -16,6 +16,7 @@ export type EventTypeRecord = Pick<
 export interface EventTypeRepository {
   // В порядке создания
   list(): EventTypeRecord[]
+  get(id: string): EventTypeRecord | undefined
   insert(record: EventTypeRecord): void
 }
 
@@ -26,6 +27,7 @@ export function createEventTypeRepository(): EventTypeRepository {
 
   return {
     list: () => [...records.values()],
+    get: (id) => records.get(id),
     insert: (record) => {
       records.set(record.id, record)
     },

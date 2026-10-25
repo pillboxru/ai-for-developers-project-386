@@ -31,6 +31,12 @@ export function createEventTypeService({ eventTypes }: EventTypeServiceDeps) {
     // Все типы, включая скрытые, в порядке создания
     listAll: (): EventType[] => eventTypes.list().map(toEventType),
 
+    // Скрытый тип для гостя не существует, как и тип с неизвестным id
+    findVisible: (id: string): EventType | undefined => {
+      const record = eventTypes.get(id)
+      return record && !record.hidden ? toEventType(record) : undefined
+    },
+
     create: (input: CreateEventType): CreateEventTypeResult => {
       // Скрытые типы тоже участвуют: иначе вернуть скрытый тип гостям было
       // бы нельзя без переименования
