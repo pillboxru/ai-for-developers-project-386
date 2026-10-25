@@ -47,6 +47,26 @@ export const toPublicEventType = ({
   durationMinutes,
 })
 
+// Поля по одному, а не спредом: у типов ввода индексная сигнатура, и в
+// записи не должно оказаться ничего, кроме полей типа события
+const toRecord = (
+  id: string,
+  {
+    title,
+    description,
+    durationMinutes,
+    slotStepMinutes,
+    hidden,
+  }: CreateEventType | UpdateEventType,
+): EventTypeRecord => ({
+  id,
+  title,
+  description,
+  durationMinutes,
+  slotStepMinutes,
+  hidden,
+})
+
 export type EventTypeService = ReturnType<typeof createEventTypeService>
 
 export function createEventTypeService({
@@ -101,15 +121,8 @@ export function createEventTypeService({
         return { kind: 'title_taken' }
       }
 
-      const record: EventTypeRecord = {
-        // id выдаёт сервер, клиент его не присылает (ADR 0003)
-        id: randomUUID(),
-        title: input.title,
-        description: input.description,
-        durationMinutes: input.durationMinutes,
-        slotStepMinutes: input.slotStepMinutes,
-        hidden: input.hidden,
-      }
+      // id выдаёт сервер, клиент его не присылает (ADR 0003)
+      const record = toRecord(randomUUID(), input)
       eventTypes.insert(record)
       return { kind: 'created', eventType: toEventType(record) }
     },
@@ -130,14 +143,7 @@ export function createEventTypeService({
         return { kind: 'has_bookings' }
       }
 
-      const record: EventTypeRecord = {
-        id,
-        title: input.title,
-        description: input.description,
-        durationMinutes: input.durationMinutes,
-        slotStepMinutes: input.slotStepMinutes,
-        hidden: input.hidden,
-      }
+      const record = toRecord(id, input)
       eventTypes.update(record)
       return { kind: 'updated', eventType: toEventType(record) }
     },
