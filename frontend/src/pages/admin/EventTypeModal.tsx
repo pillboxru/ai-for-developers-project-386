@@ -12,11 +12,12 @@ import { useForm } from '@mantine/form'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { fieldErrorsOf } from '../../api/errors.ts'
 import {
-  createEventTypeMutationOptions,
   invalidateEventTypes,
+  saveEventTypeMutationOptions,
 } from '../../api/eventTypes.ts'
 import type {
   CreateEventType,
+  EventType,
   Minutes15,
 } from '../../api/generated/types.gen.ts'
 import { formatDuration } from '../../format/duration.ts'
@@ -40,12 +41,22 @@ interface EventTypeFormValues {
   visibleToGuests: boolean
 }
 
-const initialValues: EventTypeFormValues = {
+const newEventTypeValues: EventTypeFormValues = {
   title: '',
   description: '',
   durationMinutes: 30,
   slotStepMinutes: 30,
   visibleToGuests: true,
+}
+
+function toFormValues(eventType: EventType): EventTypeFormValues {
+  return {
+    title: eventType.title,
+    description: eventType.description ?? '',
+    durationMinutes: eventType.durationMinutes,
+    slotStepMinutes: eventType.slotStepMinutes,
+    visibleToGuests: !eventType.hidden,
+  }
 }
 
 // Сервер строки не обрезает: пробелы по краям убирает форма, а пустое
@@ -64,14 +75,21 @@ function toRequestBody(values: EventTypeFormValues): CreateEventType {
 interface EventTypeModalProps {
   opened: boolean
   onClose: () => void
+  // Тип из списка для правки; без него модалка создаёт новый. Форма берёт
+  // значения при монтировании, поэтому родитель меняет key при открытии
+  eventType?: EventType
 }
 
-export function EventTypeModal({ opened, onClose }: EventTypeModalProps) {
+export function EventTypeModal({
+  opened,
+  onClose,
+  eventType,
+}: EventTypeModalProps) {
   const queryClient = useQueryClient()
   // Те же границы, что в контракте, но после обрезки пробелов: так их
   // проверит сервер, получив обрезанные строки
   const form = useForm({
-    initialValues,
+    initialValues: eventType ? toFormValues(eventType) : newEventTypeValues,
     validate: {
       title: (value) => {
         const length = value.trim().length
@@ -84,7 +102,7 @@ export function EventTypeModal({ opened, onClose }: EventTypeModalProps) {
     },
   })
   const mutation = useMutation({
-    ...createEventTypeMutationOptions(),
+    ...saveEventTypeMutationOptions(eventType?.id),
     onSuccess: async () => {
       notifySuccess('Тип события сохранён')
       form.reset()
@@ -102,10 +120,14 @@ export function EventTypeModal({ opened, onClose }: EventTypeModalProps) {
   })
 
   return (
-    <Modal opened={opened} onClose={onClose} title="Новый тип события">
+    <Modal
+      opened={opened}
+      onClose={onClose}
+      title={eventType ? 'Изменить тип события' : 'Новый тип события'}
+    >
       <form
         onSubmit={form.onSubmit((values) =>
-          mutation.mutate({ body: toRequestBody(values) }),
+          mutation.mutate(toRequestBody(values)),
         )}
       >
         <Stack>

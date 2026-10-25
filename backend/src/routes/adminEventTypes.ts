@@ -1,3 +1,4 @@
+import { sendNotFound } from '../errors.js'
 import type { RouteHandlers } from '../generated/fastify.gen.js'
 import type { ApiError } from '../generated/types.gen.js'
 import type { EventTypeService } from '../services/eventTypes.js'
@@ -13,7 +14,13 @@ const titleTaken: ApiError = {
 
 export const adminEventTypeHandlers = (
   eventTypeService: EventTypeService,
-): Pick<RouteHandlers, 'listAdminEventTypes' | 'createEventType'> => ({
+): Pick<
+  RouteHandlers,
+  | 'listAdminEventTypes'
+  | 'createEventType'
+  | 'updateEventType'
+  | 'deleteEventType'
+> => ({
   listAdminEventTypes: async (_request, reply) =>
     reply.code(200).send(eventTypeService.listAll()),
 
@@ -23,5 +30,27 @@ export const adminEventTypeHandlers = (
       return reply.code(409).send(titleTaken)
     }
     return reply.code(201).send(result.eventType)
+  },
+
+  updateEventType: async (request, reply) => {
+    const result = eventTypeService.update(
+      request.params.eventTypeId,
+      request.body,
+    )
+    if (result.kind === 'not_found') {
+      return sendNotFound(reply)
+    }
+    if (result.kind === 'title_taken') {
+      return reply.code(409).send(titleTaken)
+    }
+    return reply.code(200).send(result.eventType)
+  },
+
+  deleteEventType: async (request, reply) => {
+    const result = eventTypeService.delete(request.params.eventTypeId)
+    if (result.kind === 'not_found') {
+      return sendNotFound(reply)
+    }
+    return reply.code(204).send()
   },
 })

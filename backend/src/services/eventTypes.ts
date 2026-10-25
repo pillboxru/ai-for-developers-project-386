@@ -3,6 +3,7 @@ import type {
   CreateEventType,
   EventType,
   PublicEventType,
+  UpdateEventType,
 } from '../generated/types.gen.js'
 import type {
   EventTypeRecord,
@@ -15,6 +16,13 @@ export interface EventTypeServiceDeps {
 
 export type CreateEventTypeResult =
   { kind: 'created'; eventType: EventType } | { kind: 'title_taken' }
+
+export type UpdateEventTypeResult =
+  | { kind: 'updated'; eventType: EventType }
+  | { kind: 'not_found' }
+  | { kind: 'title_taken' }
+
+export type DeleteEventTypeResult = { kind: 'deleted' } | { kind: 'not_found' }
 
 // Названия сравниваются без учёта регистра по правилам русского языка.
 // Больше ничего не нормализуем: «ё» и «е» разные буквы, а схлопывание
@@ -45,6 +53,19 @@ export function createEventTypeService({ eventTypes }: EventTypeServiceDeps) {
     hasBookings: false,
   })
 
+  // Скрытые типы тоже участвуют: иначе вернуть скрытый тип гостям было бы
+  // нельзя без переименования. Правка с собой не сравнивает (23.2): владелец
+  // может сменить регистр в собственном названии
+  const isTitleTaken = (title: string, exceptId?: string) => {
+    const key = titleKey(title)
+    return eventTypes
+      .list()
+      .some(
+        (existing) =>
+          existing.id !== exceptId && titleKey(existing.title) === key,
+      )
+  }
+
   return {
     // Все типы, включая скрытые, в порядке создания
     listAll: (): EventType[] => eventTypes.list().map(toEventType),
@@ -64,12 +85,7 @@ export function createEventTypeService({ eventTypes }: EventTypeServiceDeps) {
     },
 
     create: (input: CreateEventType): CreateEventTypeResult => {
-      // Скрытые типы тоже участвуют: иначе вернуть скрытый тип гостям было
-      // бы нельзя без переименования
-      const key = titleKey(input.title)
-      if (
-        eventTypes.list().some((existing) => titleKey(existing.title) === key)
-      ) {
+      if (isTitleTaken(input.title)) {
         return { kind: 'title_taken' }
       }
 
@@ -84,6 +100,35 @@ export function createEventTypeService({ eventTypes }: EventTypeServiceDeps) {
       }
       eventTypes.insert(record)
       return { kind: 'created', eventType: toEventType(record) }
+    },
+
+    // Правка полной моделью (23.1): описания нет во вводе — его нет и у типа
+    update: (id: string, input: UpdateEventType): UpdateEventTypeResult => {
+      if (!eventTypes.get(id)) {
+        return { kind: 'not_found' }
+      }
+      if (isTitleTaken(input.title, id)) {
+        return { kind: 'title_taken' }
+      }
+
+      const record: EventTypeRecord = {
+        id,
+        title: input.title,
+        description: input.description,
+        durationMinutes: input.durationMinutes,
+        slotStepMinutes: input.slotStepMinutes,
+        hidden: input.hidden,
+      }
+      eventTypes.update(record)
+      return { kind: 'updated', eventType: toEventType(record) }
+    },
+
+    delete: (id: string): DeleteEventTypeResult => {
+      if (!eventTypes.get(id)) {
+        return { kind: 'not_found' }
+      }
+      eventTypes.delete(id)
+      return { kind: 'deleted' }
     },
   }
 }

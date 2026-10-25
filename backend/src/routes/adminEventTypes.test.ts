@@ -200,3 +200,293 @@ describe('уникальность названия', () => {
     expect(last.statusCode).toBe(201)
   })
 })
+
+async function createEventType(
+  app: ReturnType<typeof buildTestApp>,
+  overrides: Partial<CreateEventType> = {},
+) {
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/admin/event-types',
+    payload: eventTypeInput(overrides),
+  })
+  expect(response.statusCode).toBe(201)
+  const created: { id: string } = response.json()
+  return created
+}
+
+describe('PUT /api/admin/event-types/:eventTypeId', () => {
+  it('меняет тип полной моделью и отдаёт его', async () => {
+    const app = buildTestApp()
+    const { id } = await createEventType(app, {
+      title: 'Консультация',
+      description: 'Обсудим задачу',
+    })
+    const input = eventTypeInput({
+      title: 'Разбор кода',
+      description: 'Посмотрим код\nвместе',
+      durationMinutes: 60,
+      slotStepMinutes: 15,
+      hidden: true,
+    })
+
+    const response = await app.inject({
+      method: 'PUT',
+      url: `/api/admin/event-types/${id}`,
+      payload: input,
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toEqual({ ...input, id, hasBookings: false })
+    const list = await app.inject({
+      method: 'GET',
+      url: '/api/admin/event-types',
+    })
+    expect(list.json()).toEqual([{ ...input, id, hasBookings: false }])
+  })
+
+  it('без описания во вводе у типа описания нет', async () => {
+    const app = buildTestApp()
+    const { id } = await createEventType(app, { description: 'Обсудим задачу' })
+
+    const response = await app.inject({
+      method: 'PUT',
+      url: `/api/admin/event-types/${id}`,
+      payload: eventTypeInput(),
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).not.toHaveProperty('description')
+  })
+
+  it('своё название можно оставить и сменить в нём регистр', async () => {
+    const app = buildTestApp()
+    const { id } = await createEventType(app, { title: 'Консультация' })
+
+    for (const title of ['Консультация', 'КОНСУЛЬТАЦИЯ']) {
+      const response = await app.inject({
+        method: 'PUT',
+        url: `/api/admin/event-types/${id}`,
+        payload: eventTypeInput({ title }),
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(response.json()).toMatchObject({ title })
+    }
+  })
+
+  it('название другого типа, в том числе скрытого, даёт 409', async () => {
+    const app = buildTestApp()
+    await createEventType(app, { title: 'Разбор', hidden: true })
+    const { id } = await createEventType(app, { title: 'Консультация' })
+
+    const response = await app.inject({
+      method: 'PUT',
+      url: `/api/admin/event-types/${id}`,
+      payload: eventTypeInput({ title: 'разбор' }),
+    })
+
+    expect(response.statusCode).toBe(409)
+    expect(response.json()).toEqual({
+      code: 'event_type_title_taken',
+      message: 'Тип события с таким названием уже есть',
+      fieldErrors: [
+        { field: 'title', message: 'Тип события с таким названием уже есть' },
+      ],
+    })
+  })
+
+  it('несуществующий тип даёт 404', async () => {
+    const app = buildTestApp()
+
+    const response = await app.inject({
+      method: 'PUT',
+      url: '/api/admin/event-types/7b0c4c3e-8a43-4d5e-9d6a-2f1e0a7f0c11',
+      payload: eventTypeInput(),
+    })
+
+    expect(response.statusCode).toBe(404)
+    expect(response.json()).toEqual({
+      code: 'not_found',
+      message: 'Не найдено',
+    })
+  })
+
+  it.each([
+    ['id', { id: '7b0c4c3e-8a43-4d5e-9d6a-2f1e0a7f0c11' }],
+    ['hasBookings', { hasBookings: false }],
+  ])('присланное поле %s даёт 400 «Неизвестное поле»', async (field, extra) => {
+    const app = buildTestApp()
+    const { id } = await createEventType(app)
+
+    const response = await app.inject({
+      method: 'PUT',
+      url: `/api/admin/event-types/${id}`,
+      payload: { ...eventTypeInput(), ...extra },
+    })
+
+    expect(response.statusCode).toBe(400)
+    expect(response.json()).toMatchObject({
+      code: 'validation_error',
+      fieldErrors: [{ field, message: 'Неизвестное поле' }],
+    })
+  })
+
+  it('id в пути не UUID даёт 400', async () => {
+    const app = buildTestApp()
+
+    const response = await app.inject({
+      method: 'PUT',
+      url: '/api/admin/event-types/not-a-uuid',
+      payload: eventTypeInput(),
+    })
+
+    expect(response.statusCode).toBe(400)
+    expect(response.json()).toEqual({
+      code: 'validation_error',
+      message: expect.any(String),
+    })
+  })
+})
+
+describe('скрытие типа правкой', () => {
+  async function setHidden(
+    app: ReturnType<typeof buildTestApp>,
+    id: string,
+    hidden: boolean,
+  ) {
+    const response = await app.inject({
+      method: 'PUT',
+      url: `/api/admin/event-types/${id}`,
+      payload: eventTypeInput({ hidden }),
+    })
+    expect(response.statusCode).toBe(200)
+  }
+
+  const guestView = async (
+    app: ReturnType<typeof buildTestApp>,
+    id: string,
+  ) => {
+    const list = await app.inject({ method: 'GET', url: '/api/event-types' })
+    const page = await app.inject({
+      method: 'GET',
+      url: `/api/event-types/${id}`,
+    })
+    const slots = await app.inject({
+      method: 'GET',
+      url: `/api/event-types/${id}/slots`,
+    })
+    return {
+      listed: list
+        .json<{ id: string }[]>()
+        .some((eventType) => eventType.id === id),
+      pageStatus: page.statusCode,
+      slotsStatus: slots.statusCode,
+    }
+  }
+
+  it('скрытый тип пропадает у гостя и остаётся у владельца', async () => {
+    const app = buildTestApp()
+    const { id } = await createEventType(app)
+
+    await setHidden(app, id, true)
+
+    expect(await guestView(app, id)).toEqual({
+      listed: false,
+      pageStatus: 404,
+      slotsStatus: 404,
+    })
+    const admin = await app.inject({
+      method: 'GET',
+      url: '/api/admin/event-types',
+    })
+    expect(admin.json()).toEqual([
+      expect.objectContaining({ id, hidden: true }),
+    ])
+  })
+
+  it('вернуть тип гостям можно в любой момент', async () => {
+    const app = buildTestApp()
+    const { id } = await createEventType(app, { hidden: true })
+
+    await setHidden(app, id, false)
+
+    expect(await guestView(app, id)).toEqual({
+      listed: true,
+      pageStatus: 200,
+      slotsStatus: 200,
+    })
+  })
+})
+
+describe('DELETE /api/admin/event-types/:eventTypeId', () => {
+  it('удаляет тип без бронирований: 204, у владельца и гостя его нет', async () => {
+    const app = buildTestApp()
+    const { id } = await createEventType(app, { title: 'Консультация' })
+    const kept = await createEventType(app, { title: 'Разбор' })
+
+    const response = await app.inject({
+      method: 'DELETE',
+      url: `/api/admin/event-types/${id}`,
+    })
+
+    expect(response.statusCode).toBe(204)
+    expect(response.body).toBe('')
+    const admin = await app.inject({
+      method: 'GET',
+      url: '/api/admin/event-types',
+    })
+    expect(admin.json()).toEqual([expect.objectContaining({ id: kept.id })])
+    const page = await app.inject({
+      method: 'GET',
+      url: `/api/event-types/${id}`,
+    })
+    expect(page.statusCode).toBe(404)
+  })
+
+  it('название удалённого типа снова свободно', async () => {
+    const app = buildTestApp()
+    const { id } = await createEventType(app, { title: 'Консультация' })
+    await app.inject({ method: 'DELETE', url: `/api/admin/event-types/${id}` })
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/event-types',
+      payload: eventTypeInput({ title: 'Консультация' }),
+    })
+
+    expect(response.statusCode).toBe(201)
+  })
+
+  it('несуществующий тип даёт 404, в том числе повторное удаление', async () => {
+    const app = buildTestApp()
+    const { id } = await createEventType(app)
+    await app.inject({ method: 'DELETE', url: `/api/admin/event-types/${id}` })
+
+    const response = await app.inject({
+      method: 'DELETE',
+      url: `/api/admin/event-types/${id}`,
+    })
+
+    expect(response.statusCode).toBe(404)
+    expect(response.json()).toEqual({
+      code: 'not_found',
+      message: 'Не найдено',
+    })
+  })
+
+  it('id в пути не UUID даёт 400', async () => {
+    const app = buildTestApp()
+
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/api/admin/event-types/not-a-uuid',
+    })
+
+    expect(response.statusCode).toBe(400)
+    expect(response.json()).toEqual({
+      code: 'validation_error',
+      message: expect.any(String),
+    })
+  })
+})
