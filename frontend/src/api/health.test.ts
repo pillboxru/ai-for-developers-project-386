@@ -1,18 +1,12 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
+import { server } from '../test/server.ts'
+import { handleGetHealth } from './generated/msw.gen.ts'
 import { fetchHealth } from './health.ts'
 
-afterEach(() => {
-  vi.unstubAllGlobals()
-})
-
 describe('fetchHealth', () => {
-  it('запрашивает /api/health у того же сервера через SDK', async () => {
-    const fetchMock = vi.fn<(request: Request) => Promise<Response>>(async () =>
-      Response.json({ status: 'ok' }),
-    )
-    vi.stubGlobal('fetch', fetchMock)
+  it('отдаёт статус сервера из /api/health', async () => {
+    server.use(handleGetHealth({ body: { status: 'ok' } }))
 
     await expect(fetchHealth()).resolves.toEqual({ status: 'ok' })
-    expect(fetchMock.mock.calls[0][0].url).toBe(`${location.origin}/api/health`)
   })
 })

@@ -1,7 +1,13 @@
 import closeWithGrace from 'close-with-grace'
 import { buildApp } from './app.js'
 
-const app = buildApp({ staticDir: process.env.STATIC_DIR, logger: true })
+const app = buildApp({
+  staticDir: process.env.STATIC_DIR,
+  logger: true,
+  now: () => new Date(),
+  ownerName: process.env.OWNER_NAME ?? 'Владелец календаря',
+  ownerTimeZone: process.env.OWNER_TIME_ZONE ?? 'Europe/Moscow',
+})
 const port = Number(process.env.PORT ?? 3000)
 
 // В контейнере node работает как PID 1 и без обработчика игнорирует SIGTERM:

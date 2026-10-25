@@ -4,8 +4,11 @@ import { fileURLToPath } from 'node:url'
 import Fastify from 'fastify'
 import fastifyStatic from '@fastify/static'
 import openapiGlue from 'fastify-openapi-glue'
+import responseValidation from '@fastify/response-validation'
+import ajvFormats from 'ajv-formats'
 import { apiErrorHandler, sendNotFound } from './errors.js'
 import { healthHandlers } from './routes/health.js'
+import { ownerHandlers } from './routes/owner.js'
 
 // Собранный контракт лежит на том же расстоянии от src/ и от dist/, а в
 // Docker-образ копируется по тому же пути
@@ -17,9 +20,38 @@ export interface AppOptions {
   // Папка с собранным фронтендом. В продакшене бекенд раздаёт его сам.
   staticDir?: string
   logger?: boolean
+  // Часы приходят снаружи, чтобы тесты фиксировали время без фейковых таймеров
+  now: () => Date
+  ownerName: string
+  // IANA-имя пояса, по которому считаются окно записи и слоты
+  ownerTimeZone: string
+  // Сверять ответы с контрактом. Включают тесты маршрутов: проверка
+  // замедляет каждый ответ, поэтому в продакшене она выключена
+  validateResponses?: boolean
 }
 
-export function buildApp({ staticDir, logger = false }: AppOptions = {}) {
+// Intl знает базу IANA из ICU и бросает RangeError на неизвестное имя.
+// Проверяем при сборке, чтобы сервер с опечаткой в поясе не стартовал,
+// а не считал слоты неизвестно по каким часам
+function assertTimeZone(timeZone: string) {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone })
+  } catch {
+    throw new Error(
+      `Неизвестный часовой пояс владельца «${timeZone}»: нужно IANA-имя, например Europe/Moscow`,
+    )
+  }
+}
+
+export function buildApp({
+  staticDir,
+  logger = false,
+  ownerName,
+  ownerTimeZone,
+  validateResponses = false,
+}: AppOptions) {
+  assertTimeZone(ownerTimeZone)
+
   const app = Fastify({
     logger,
     ajv: {
@@ -37,9 +69,31 @@ export function buildApp({ staticDir, logger = false }: AppOptions = {}) {
 
   app.setErrorHandler(apiErrorHandler)
 
+  // Регистрируется до glue: плагин навешивает проверку в хуке onRoute и
+  // видит только маршруты, добавленные после него
+  if (validateResponses) {
+    app.register(responseValidation, {
+      ajv: {
+        // Настройки по умолчанию у плагина правят ответ (удаляют лишние поля,
+        // подставляют default) и этим прячут расхождение с контрактом
+        removeAdditional: false,
+        useDefaults: false,
+        coerceTypes: false,
+        allErrors: true,
+        strictTypes: false,
+        // ajv-formats — CommonJS: в ESM импорт по умолчанию отдаёт весь
+        // module.exports, а функция плагина лежит в его поле default
+        plugins: [ajvFormats.default],
+      },
+    })
+  }
+
   app.register(openapiGlue, {
     specification,
-    serviceHandlers: { ...healthHandlers },
+    serviceHandlers: {
+      ...healthHandlers,
+      ...ownerHandlers({ name: ownerName, timeZone: ownerTimeZone }),
+    },
   })
 
   if (staticDir && existsSync(staticDir)) {

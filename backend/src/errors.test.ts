@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildApp } from './app.js'
+import { buildTestApp } from './test/buildTestApp.js'
 
 describe('ошибки API', () => {
   it('неизвестный путь под /api отдаёт 404 not_found', async () => {
-    const app = buildApp()
+    const app = buildTestApp()
     const response = await app.inject({ method: 'GET', url: '/api/unknown' })
 
     expect(response.statusCode).toBe(404)
@@ -14,7 +14,7 @@ describe('ошибки API', () => {
   })
 
   it('тело без обязательных полей отдаёт 400 validation_error по каждому полю', async () => {
-    const app = buildApp()
+    const app = buildTestApp()
     const response = await app.inject({
       method: 'POST',
       url: '/api/admin/event-types',
@@ -35,7 +35,7 @@ describe('ошибки API', () => {
   })
 
   it('длинное и лишнее поле отдают свои сообщения', async () => {
-    const app = buildApp()
+    const app = buildTestApp()
     const response = await app.inject({
       method: 'POST',
       url: '/api/admin/event-types',
@@ -56,7 +56,7 @@ describe('ошибки API', () => {
   })
 
   it('путь вложенного поля идёт через точки от корня тела', async () => {
-    const app = buildApp()
+    const app = buildTestApp()
     const day: never[] = []
     const response = await app.inject({
       method: 'PUT',
@@ -84,7 +84,7 @@ describe('ошибки API', () => {
   })
 
   it('невалидный JSON в теле отдаёт 400 validation_error', async () => {
-    const app = buildApp()
+    const app = buildTestApp()
     const response = await app.inject({
       method: 'POST',
       url: '/api/admin/event-types',
@@ -100,7 +100,7 @@ describe('ошибки API', () => {
   })
 
   it('неверный параметр пути отдаёт 400 только с сообщением', async () => {
-    const app = buildApp()
+    const app = buildTestApp()
     const response = await app.inject({
       method: 'GET',
       url: '/api/event-types/not-a-uuid',
@@ -114,7 +114,7 @@ describe('ошибки API', () => {
   })
 
   it('непредвиденная ошибка отдаёт 500 internal_error', async () => {
-    const app = buildApp()
+    const app = buildTestApp()
     app.get('/api/test-failure', async () => {
       throw new Error('boom')
     })

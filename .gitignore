@@ -2,6 +2,10 @@
 node_modules
 dist
 coverage
+
+# Отчёты Playwright
+playwright-report
+test-results
 *.tsbuildinfo
 
 # Генерируется из контракта (make generate)

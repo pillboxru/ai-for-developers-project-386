@@ -67,7 +67,9 @@ export function apiErrorHandler(
   request: FastifyRequest,
   reply: FastifyReply,
 ) {
-  if (error.validation) {
+  // validation есть и у ошибки проверки ответа (@fastify/response-validation),
+  // но это ошибка сервера, а не запроса: у неё нет validationContext
+  if (error.validation && error.validationContext) {
     const body: ApiError =
       error.validationContext === 'body'
         ? {

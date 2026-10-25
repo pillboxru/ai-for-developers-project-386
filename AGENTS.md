@@ -8,12 +8,13 @@
 
 Запускай только через make:
 
-- `make setup` — установить зависимости
+- `make setup` — установить зависимости и Chromium для e2e (`make e2e-install` ставит только Chromium)
 - `make generate` — собрать OpenAPI из контракта и сгенерировать из него код; `dev`, `test`, `build` вызывают её сами
 - `make dev` — бекенд на :3000 и фронтенд на :5173 (Vite проксирует `/api` на бекенд)
-- `make test` — тесты (Vitest)
+- `make test` — тесты Vitest: unit, маршруты, компоненты
+- `make e2e` — сборка и e2e Playwright против собранного приложения; порт сервера — `E2E_PORT` (по умолчанию 3100): `make e2e E2E_PORT=3145`
 - `make lint` / `make lint-fix` — oxlint и Prettier
-- `make check` — lint + test + build; запускай перед каждым коммитом
+- `make check` — lint + test + build (с `tsc`) + e2e, то же гоняет CI; запускай перед каждым коммитом
 - `make docker-build` / `make docker-run` — образ и запуск на :3000
 
 ## Структура
@@ -22,9 +23,10 @@
 - Генерируемые пути (не коммитятся, руками не правятся; контракт меняется только в `contract/main.tsp`, затем `make generate`):
   - `contract/dist/openapi.json` — OpenAPI, по нему glue регистрирует маршруты;
   - `backend/src/generated/` — типы моделей (`types.gen.ts`) и `RouteHandlers` (`fastify.gen.ts`);
-  - `frontend/src/api/generated/` — клиент fetch, типы, SDK (`sdk.gen.ts`) и опции TanStack Query (`@tanstack/react-query.gen.ts`).
+  - `frontend/src/api/generated/` — клиент fetch, типы, SDK (`sdk.gen.ts`), опции TanStack Query (`@tanstack/react-query.gen.ts`) и типизированные фабрики хендлеров MSW для тестов (`msw.gen.ts`).
 - `backend/` — Fastify + TypeScript. `src/app.ts` собирает приложение (`buildApp`), `src/server.ts` только запускает его.
-- `frontend/` — Vite + React + Mantine. Тесты рядом с кодом (`*.test.tsx`).
+- `frontend/` — Vite + React + Mantine. Тесты рядом с кодом (`*.test.tsx`), общая обвязка тестов — `src/test/`.
+- `e2e/` — сценарии Playwright, конфиг `playwright.config.ts` в корне.
 - npm workspaces: зависимости ставь в свой пакет (`npm install <pkg> -w backend`).
 - `CLAUDE.md` содержит только `@AGENTS.md`. Всё, что нужно добавить в `CLAUDE.md` (в том числе по инструкции скилла), добавляй в `AGENTS.md`.
 
@@ -36,9 +38,10 @@
 
 ## Образцы
 
-- Маршрут: обработчик `backend/src/routes/health.ts`, подключён в `serviceHandlers` в `backend/src/app.ts`; его тест через `app.inject()`: `backend/src/routes/health.test.ts`. Тесты ошибок API: `backend/src/errors.test.ts`.
+- Маршрут: обработчик `backend/src/routes/owner.ts` (фабрика, получает зависимости аргументом), подключён в `serviceHandlers` в `backend/src/app.ts`; его тест через `app.inject()`: `backend/src/routes/owner.test.ts`. Приложение в тестах маршрутов собирает `buildTestApp` (`backend/src/test/buildTestApp.ts`): фиксированные `now` и пояс владельца, проверка ответов по контракту включена. Тесты ошибок API: `backend/src/errors.test.ts`.
 - Запрос к API: `frontend/src/api/health.ts` (обёртка над SDK), его тест: `frontend/src/api/health.test.ts`.
-- Тест компонента: `frontend/src/App.test.tsx` (обёртка `MantineProvider` и `MemoryRouter`; `fetch` подменяй через `vi.stubGlobal`).
+- Тест компонента: `frontend/src/App.test.tsx`. Рендер — `renderApp(path)` из `frontend/src/test/renderApp.tsx` (`MantineProvider`, `MemoryRouter`, `QueryClientProvider` со своим клиентом без повторов). API подменяет MSW: `server.use(handleGetOwner({ body }))`, сервер — `frontend/src/test/server.ts`, фабрики — `api/generated/msw.gen.ts`; запрос без хендлера валит тест. `fetch` через `vi.stubGlobal` не подменяй. Процесс Vitest живёт в `TZ=Asia/Vladivostok`, владелец — в `Europe/Moscow`.
+- E2E: `e2e/smoke.spec.ts`. Настоящий сервер без подмены API, данные готовь через фикстуру `request` (`request.post('/api/admin/event-types', { data })`), названия уникальны в каждом тесте.
 
 ## Как писать код
 

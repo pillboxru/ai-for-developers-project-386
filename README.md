@@ -11,7 +11,7 @@
 
 - Бекенд: [Fastify](https://fastify.dev/) + TypeScript
 - Фронтенд: [Vite](https://vite.dev/) + React + [Mantine](https://mantine.dev/)
-- Тесты: [Vitest](https://vitest.dev/), линтер: [oxlint](https://oxc.rs/) + [Prettier](https://prettier.io/)
+- Тесты: [Vitest](https://vitest.dev/), [MSW](https://mswjs.io/), e2e — [Playwright](https://playwright.dev/), линтер: [oxlint](https://oxc.rs/) + [Prettier](https://prettier.io/)
 - Сборка и запуск: npm workspaces, GNU Make, Docker
 - CI: GitHub Actions, релизы: [release-please](https://github.com/googleapis/release-please)
 
@@ -25,11 +25,14 @@ cd ai-for-developers-project-386
 make setup
 ```
 
+`make setup` ставит зависимости и Chromium для e2e-тестов (отдельно Chromium ставит `make e2e-install`).
+
 ## Использование
 
 ```bash
 make dev      # бекенд на http://localhost:3000, фронтенд на http://localhost:5173
-make check    # линтер, тесты и сборка
+make check    # линтер, тесты, сборка и e2e-тесты — то же, что гоняет CI
+make e2e      # только e2e-тесты Playwright против собранного приложения
 ```
 
 Контракт API описан на TypeSpec в `contract/main.tsp`. `make generate` собирает из него OpenAPI и генерирует SDK фронтенда и типы бекенда. `make dev`, `make test` и `make build` запускают генерацию сами, сгенерированные файлы в git не хранятся.
@@ -41,7 +44,9 @@ make docker-build
 make docker-run
 ```
 
-Порт задаётся переменной окружения `PORT` (по умолчанию `3000`).
+Порт задаётся переменной окружения `PORT` (по умолчанию `3000`). Имя владельца — `OWNER_NAME` (по умолчанию «Владелец календаря»), его часовой пояс — `OWNER_TIME_ZONE`, IANA-имя (по умолчанию `Europe/Moscow`); с неверным поясом сервер не стартует.
+
+E2E-тесты поднимают сервер на порту `E2E_PORT` (по умолчанию `3100`): `make e2e E2E_PORT=3145`.
 
 ---
 

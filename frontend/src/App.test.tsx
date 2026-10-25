@@ -1,18 +1,6 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
-import { MantineProvider } from '@mantine/core'
-import { MemoryRouter } from 'react-router'
+import { fireEvent, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import App from './App.tsx'
-
-function renderApp(path: string) {
-  render(
-    <MantineProvider>
-      <MemoryRouter initialEntries={[path]}>
-        <App />
-      </MemoryRouter>
-    </MantineProvider>,
-  )
-}
+import { renderApp } from './test/renderApp.tsx'
 
 describe('App', () => {
   it('главная рассказывает о сервисе и ведёт на страницу записи', () => {

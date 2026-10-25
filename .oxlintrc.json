@@ -3,6 +3,8 @@
   "plugins": ["react", "typescript", "oxc", "vitest"],
   "ignorePatterns": [
     "**/dist/**",
+    "playwright-report/**",
+    "test-results/**",
     "frontend/src/api/generated/**",
     "backend/src/generated/**"
   ],
