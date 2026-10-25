@@ -27,6 +27,21 @@ export function hourIn(instant: string, timeZone: string) {
   )
 }
 
+// Дата 'YYYY-MM-DD' и минуты от начала суток по часам пояса: так владелец
+// задаёт расписание
+export function wallTimeIn(instant: string, timeZone: string) {
+  const [hours, minutes] = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  })
+    .format(new Date(instant))
+    .split(':')
+    .map(Number)
+  return { date: dateKeyIn(instant, timeZone), minutes: hours * 60 + minutes }
+}
+
 // «09:00»: 24 часа в любой локали браузера
 export function formatTime(instant: string, timeZone: string) {
   return new Intl.DateTimeFormat('ru-RU', {
