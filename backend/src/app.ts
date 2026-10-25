@@ -8,11 +8,14 @@ import responseValidation from '@fastify/response-validation'
 import ajvFormats from 'ajv-formats'
 import { apiErrorHandler, sendNotFound } from './errors.js'
 import { createEventTypeRepository } from './repositories/eventTypes.js'
+import { createScheduleRepository } from './repositories/schedule.js'
 import { adminEventTypeHandlers } from './routes/adminEventTypes.js'
 import { eventTypeHandlers } from './routes/eventTypes.js'
 import { healthHandlers } from './routes/health.js'
 import { ownerHandlers } from './routes/owner.js'
+import { slotHandlers } from './routes/slots.js'
 import { createEventTypeService } from './services/eventTypes.js'
+import { createSlotService } from './services/slots.js'
 
 // Собранный контракт лежит на том же расстоянии от src/ и от dist/, а в
 // Docker-образ копируется по тому же пути
@@ -50,6 +53,7 @@ function assertTimeZone(timeZone: string) {
 export function buildApp({
   staticDir,
   logger = false,
+  now,
   ownerName,
   ownerTimeZone,
   validateResponses = false,
@@ -59,6 +63,11 @@ export function buildApp({
   // Хранилище своё у каждого приложения: тесты не делят данные
   const eventTypeService = createEventTypeService({
     eventTypes: createEventTypeRepository(),
+  })
+  const slotService = createSlotService({
+    schedule: createScheduleRepository(),
+    now,
+    timeZone: ownerTimeZone,
   })
 
   const app = Fastify({
@@ -104,6 +113,7 @@ export function buildApp({
       ...ownerHandlers({ name: ownerName, timeZone: ownerTimeZone }),
       ...eventTypeHandlers(eventTypeService),
       ...adminEventTypeHandlers(eventTypeService),
+      ...slotHandlers({ eventTypeService, slotService }),
     },
   })
 

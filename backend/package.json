@@ -15,7 +15,8 @@
     "ajv-formats": "^3.0.1",
     "close-with-grace": "^2.5.0",
     "fastify": "^5.12.7",
-    "fastify-openapi-glue": "^4.12.0"
+    "fastify-openapi-glue": "^4.12.0",
+    "temporal-polyfill": "^1.0.6"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",
