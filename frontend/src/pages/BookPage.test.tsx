@@ -2,7 +2,9 @@ import { fireEvent, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import {
   handleGetEventType,
+  handleGetOwner,
   handleListEventTypes,
+  handleListSlots,
 } from '../api/generated/msw.gen.ts'
 import type { PublicEventType } from '../api/generated/types.gen.ts'
 import { renderApp } from '../test/renderApp.tsx'
@@ -78,6 +80,16 @@ describe('список типов событий гостя', () => {
     server.use(
       handleListEventTypes({ body: [eventType] }),
       handleGetEventType({ body: eventType }),
+      handleGetOwner({ body: { name: 'Анна', timeZone: 'Europe/Moscow' } }),
+      handleListSlots({
+        body: {
+          bookingWindow: {
+            start: '2026-10-24T21:00:00Z',
+            end: '2026-11-07T21:00:00Z',
+          },
+          slots: [],
+        },
+      }),
     )
     renderApp('/book')
 
