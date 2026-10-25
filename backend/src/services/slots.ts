@@ -13,7 +13,7 @@ import type {
   ScheduleRecord,
   ScheduleRepository,
 } from '../repositories/schedule.js'
-import { toBooking } from './bookings.js'
+import { listAllBookings } from './bookings.js'
 
 export interface SlotInput {
   eventType: Pick<EventType, 'durationMinutes' | 'slotStepMinutes'>
@@ -201,27 +201,14 @@ export function createSlotService({
   now,
   timeZone,
 }: SlotServiceDeps) {
-  // Бронирования всех типов: неотменённые не пересекаются, даже если у них
-  // разные типы событий
-  const allBookings = () =>
-    bookings.list().map((record) => {
-      const eventType = eventTypes.get(record.eventTypeId)
-      // Тип с бронированиями не удаляется: без него конец бронирования не из
-      // чего вычислить (ADR 0002)
-      if (!eventType) {
-        throw new Error(
-          `Бронирование ${record.id} ссылается на несуществующий тип события ${record.eventTypeId}`,
-        )
-      }
-      return toBooking(record, eventType)
-    })
-
   return {
     listSlots: (eventType: SlotInput['eventType']): SlotList =>
       computeSlots({
         eventType,
         availability: schedule.get(),
-        bookings: allBookings(),
+        // Бронирования всех типов: неотменённые не пересекаются, даже если
+        // у них разные типы событий
+        bookings: listAllBookings(bookings, eventTypes),
         now: now(),
         timeZone,
       }),

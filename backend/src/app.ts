@@ -10,6 +10,7 @@ import { apiErrorHandler, sendNotFound } from './errors.js'
 import { createBookingRepository } from './repositories/bookings.js'
 import { createEventTypeRepository } from './repositories/eventTypes.js'
 import { createScheduleRepository } from './repositories/schedule.js'
+import { adminBookingHandlers } from './routes/adminBookings.js'
 import { adminEventTypeHandlers } from './routes/adminEventTypes.js'
 import { bookingHandlers } from './routes/bookings.js'
 import { eventTypeHandlers } from './routes/eventTypes.js'
@@ -76,8 +77,10 @@ export function buildApp({
   })
   const bookingService = createBookingService({
     bookings,
+    eventTypes,
     eventTypeService,
     slotService,
+    now,
   })
 
   const app = Fastify({
@@ -125,6 +128,7 @@ export function buildApp({
       ...adminEventTypeHandlers(eventTypeService),
       ...slotHandlers({ eventTypeService, slotService }),
       ...bookingHandlers(bookingService),
+      ...adminBookingHandlers(bookingService),
     },
   })
 
